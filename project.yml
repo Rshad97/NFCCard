@@ -16,3 +16,4 @@ targets:
         CODE_SIGN_ENTITLEMENTS: NFCCard/NFCCard.entitlements
         INFOPLIST_FILE: NFCCard/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1"
