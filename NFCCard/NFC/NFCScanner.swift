@@ -17,11 +17,15 @@ final class NFCScanner: NSObject, ObservableObject {
             return
         }
 
-        let newSession = NFCTagReaderSession(
+        guard let newSession = NFCTagReaderSession(
             pollingOption: [.iso14443, .iso15693, .iso18092],
             delegate: self,
             queue: nil
-        )
+        ) else {
+            errorMessage = "Unable to create an NFC reader session."
+            return
+        }
+
         newSession.alertMessage = "Hold the top of your iPhone near the NFC card."
         session = newSession
         isScanning = true
@@ -77,8 +81,7 @@ final class NFCScanner: NSObject, ObservableObject {
                 technology: "FeliCa / ISO 18092",
                 uidHex: felica.currentIDm.hexString,
                 details: [
-                    "System Code": felica.currentSystemCode.hexString,
-                    "PMm": felica.currentPMm.hexString
+                    "System Code": felica.currentSystemCode.hexString
                 ]
             )
 
