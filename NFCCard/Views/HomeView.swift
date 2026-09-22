@@ -14,6 +14,13 @@ struct HomeView: View {
                     }
                     .disabled(scanner.isScanning)
 
+                    Button {
+                        scanner.startFeliCaScan()
+                    } label: {
+                        Label("Analyze FeliCa / NFC-F", systemImage: "radiowaves.left.and.right")
+                    }
+                    .disabled(scanner.isScanning)
+
                     if scanner.isScanning {
                         Button("Cancel Scan", role: .destructive) {
                             scanner.cancelScan()
@@ -29,7 +36,7 @@ struct HomeView: View {
                             .multilineTextAlignment(.trailing)
                     }
                 } footer: {
-                    Text("NFCCard performs a read-only discovery pass first: identity, public metadata, NDEF capability, protocol modules, Card Genome and privacy signals.")
+                    Text("Standard analysis scans ISO 14443 and ISO 15693 cards. FeliCa/NFC-F is intentionally isolated in its own reader session because NFC-F discovery depends on declared system codes and can invalidate mixed polling sessions on some iOS configurations.")
                 }
 
                 if let card = scanner.lastCard {
