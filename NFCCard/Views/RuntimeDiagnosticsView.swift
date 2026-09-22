@@ -25,18 +25,18 @@ struct RuntimeDiagnosticsView: View {
 
             Section("Bundle Configuration") {
                 LabeledContent("Usage description", value: usageDescription?.isEmpty == false ? "Present" : "Missing")
-                LabeledContent("ISO 7816 AIDs", value: "(iso7816AIDs.count)")
-                LabeledContent("FeliCa system codes", value: "(felicaSystemCodes.count)")
+                LabeledContent("ISO 7816 AIDs", value: String(iso7816AIDs.count))
+                LabeledContent("FeliCa system codes", value: String(felicaSystemCodes.count))
 
                 if !iso7816AIDs.isEmpty {
-                    ForEach(iso7816AIDs, id: .self) { aid in
+                    ForEach(iso7816AIDs, id: \.self) { aid in
                         Text(aid).font(.caption.monospaced()).textSelection(.enabled)
                     }
                 }
 
                 if !felicaSystemCodes.isEmpty {
-                    ForEach(felicaSystemCodes, id: .self) { code in
-                        Text("FeliCa (code)").font(.caption.monospaced()).textSelection(.enabled)
+                    ForEach(felicaSystemCodes, id: \.self) { code in
+                        Text("FeliCa " + code).font(.caption.monospaced()).textSelection(.enabled)
                     }
                 }
             }
@@ -57,7 +57,7 @@ struct RuntimeDiagnosticsView: View {
             }
 
             Section("Local Storage") {
-                LabeledContent("Saved cards", value: "(library.cards.count)")
+                LabeledContent("Saved cards", value: String(library.cards.count))
                 if let error = library.storageError {
                     Text(error).foregroundStyle(.red)
                 } else {
