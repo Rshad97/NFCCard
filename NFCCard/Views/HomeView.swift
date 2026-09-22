@@ -35,6 +35,9 @@ struct HomeView: View {
                     }
 
                     Section("Intelligence") {
+                        NavigationLink("Protocol Atlas") {
+                            ProtocolAtlasView(card: card)
+                        }
                         NavigationLink("Capability Map") {
                             CapabilityMapView(card: card)
                         }
