@@ -15,5 +15,3 @@ targets:
         SWIFT_VERSION: 5.0
         CODE_SIGN_ENTITLEMENTS: NFCCard/NFCCard.entitlements
         INFOPLIST_FILE: NFCCard/Info.plist
-    info:
-      path: NFCCard/Info.plist
