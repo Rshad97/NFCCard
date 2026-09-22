@@ -1,0 +1,19 @@
+name: NFCCard
+options:
+  bundleIdPrefix: com.rashad
+  deploymentTarget:
+    iOS: "16.0"
+targets:
+  NFCCard:
+    type: application
+    platform: iOS
+    sources:
+      - NFCCard
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.rashad.nfccard
+        SWIFT_VERSION: 5.0
+        CODE_SIGN_ENTITLEMENTS: NFCCard/NFCCard.entitlements
+        INFOPLIST_FILE: NFCCard/Info.plist
+    info:
+      path: NFCCard/Info.plist
