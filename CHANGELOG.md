@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.1
+
+### Reader-session compatibility
+- Split the default reader into a standard ISO 14443 + ISO 15693 session.
+- Moved FeliCa / NFC-F discovery into a dedicated ISO 18092 session.
+- This prevents an NFC-F system-code/configuration problem from invalidating the normal MIFARE/DESFire/NTAG/ISO15693 reader path.
+- Increased the activation watchdog from 5 to 8 seconds to avoid false activation failures on slower SpringBoard/Core NFC launches.
+- Added the active scan profile to Runtime Diagnostics and the Flight Recorder.
+
+### UI
+- Added a dedicated **Analyze FeliCa / NFC-F** action.
+- Kept the black/blue NFCCard AppIcon in the application bundle and Sileo metadata.
+
+### Audit
+- Re-checked scanner lifecycle, NDEF one-shot completion, Card Library persistence, Key Vault update semantics, Protocol Atlas parsing, Info.plist discovery identifiers, rootless package paths, and CI entitlement validation.
+
 ## 0.3.0
 
 ### Scanner reliability
