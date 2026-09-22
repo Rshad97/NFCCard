@@ -33,18 +33,23 @@ enum NDEFInspector {
             }
 
             tag.readNDEF { message, _ in
-                let records = message?.records.map { record in
-                    let type = String(data: record.type, encoding: .utf8) ?? record.type.hexString
-                    let previewData = record.payload.prefix(64)
-                    let preview = String(data: previewData, encoding: .utf8) ?? Data(previewData).hexString
-                    return NDEFRecordSummary(
-                        typeNameFormat: String(describing: record.typeNameFormat),
-                        type: type,
-                        identifierHex: record.identifier.hexString,
-                        payloadPreview: preview,
-                        payloadLength: record.payload.count
-                    )
-                } ?? []
+                let records: [NDEFRecordSummary]
+                if let message {
+                    records = message.records.map { record -> NDEFRecordSummary in
+                        let type = String(data: record.type, encoding: .utf8) ?? record.type.hexString
+                        let previewData = record.payload.prefix(64)
+                        let preview = String(data: previewData, encoding: .utf8) ?? Data(previewData).hexString
+                        return NDEFRecordSummary(
+                            typeNameFormat: String(describing: record.typeNameFormat),
+                            type: type,
+                            identifierHex: record.identifier.hexString,
+                            payloadPreview: preview,
+                            payloadLength: record.payload.count
+                        )
+                    }
+                } else {
+                    records = []
+                }
 
                 completion(NDEFMetadata(access: access, capacity: capacity, records: records))
             }
