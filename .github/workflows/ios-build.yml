@@ -36,12 +36,22 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             build
 
-      - name: Sign jailbreak app entitlements
+      - name: Validate app metadata
         run: |
           set -euo pipefail
           APP="$PWD/build/Build/Products/Release-iphoneos/NFCCard.app"
           test -d "$APP"
           test -f "$APP/NFCCard"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")" = "com.rashad.nfccard"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist")" = "0.2.2"
+          /usr/libexec/PlistBuddy -c 'Print :NFCReaderUsageDescription' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :com.apple.developer.nfc.readersession.felica.systemcodes' "$APP/Info.plist"
+          plutil -p "$APP/Info.plist"
+
+      - name: Sign jailbreak app entitlements
+        run: |
+          set -euo pipefail
+          APP="$PWD/build/Build/Products/Release-iphoneos/NFCCard.app"
           ldid -SNFCCard/NFCCard.entitlements "$APP/NFCCard"
           /usr/bin/codesign -d --entitlements :- "$APP/NFCCard" 2>/dev/null || true
 
@@ -50,7 +60,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          VERSION="0.2.1"
+          VERSION="0.2.2"
           ROOT="$RUNNER_TEMP/nfccard-package"
           APP="$PWD/build/Build/Products/Release-iphoneos/NFCCard.app"
           OUT="$PWD/packages"
