@@ -185,17 +185,30 @@ jobs:
 
           cp design/AppIconSource.png "$REPO/icon.png"
 
-          cat > "$REPO/Release" <<'EOF'
-          Origin: NFCCard
-          Label: NFCCard
-          Suite: stable
-          Version: 1.0
-          Codename: ios
-          Architectures: iphoneos-arm64
-          Components: main
-          Description: NFCCard rootless jailbreak package repository
-          EOF
-          sed -i '' 's/^          //' "$REPO/Release"
+          DATE_RFC2822="$(LC_ALL=C date -R)"
+          {
+            echo "Origin: NFCCard"
+            echo "Label: NFCCard"
+            echo "Suite: stable"
+            echo "Version: 1.1"
+            echo "Codename: ios"
+            echo "Date: $DATE_RFC2822"
+            echo "Architectures: iphoneos-arm64"
+            echo "Components: main"
+            echo "Description: NFCCard rootless jailbreak package repository"
+            echo "MD5Sum:"
+            for FILE in Packages Packages.gz Packages.bz2; do
+              HASH="$(md5 -q "$REPO/$FILE")"
+              SIZE="$(stat -f%z "$REPO/$FILE")"
+              printf " %s %16s %s\n" "$HASH" "$SIZE" "$FILE"
+            done
+            echo "SHA256:"
+            for FILE in Packages Packages.gz Packages.bz2; do
+              HASH="$(shasum -a 256 "$REPO/$FILE" | awk '{print $1}')"
+              SIZE="$(stat -f%z "$REPO/$FILE")"
+              printf " %s %16s %s\n" "$HASH" "$SIZE" "$FILE"
+            done
+          } > "$REPO/Release"
 
           cd "$REPO"
           git init
