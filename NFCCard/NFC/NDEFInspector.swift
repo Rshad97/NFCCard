@@ -43,25 +43,28 @@ enum NDEFInspector {
 
             tag.readNDEF { message, error in
                 guard error == nil else {
-                    // The capability/status query succeeded, so preserve that useful information
-                    // even if the message itself couldn't be read.
                     finish.call(NDEFMetadata(access: access, capacity: capacity, records: []))
                     return
                 }
 
-                let records = message?.records.map { record in
-                    let type = String(data: record.type, encoding: .utf8) ?? record.type.hexString
-                    let previewData = record.payload.prefix(64)
-                    let preview = String(data: previewData, encoding: .utf8) ?? Data(previewData).hexString
+                let records: [NDEFRecordSummary]
+                if let message {
+                    records = message.records.map { record -> NDEFRecordSummary in
+                        let type = String(data: record.type, encoding: .utf8) ?? record.type.hexString
+                        let previewData = record.payload.prefix(64)
+                        let preview = String(data: previewData, encoding: .utf8) ?? Data(previewData).hexString
 
-                    return NDEFRecordSummary(
-                        typeNameFormat: String(describing: record.typeNameFormat),
-                        type: type,
-                        identifierHex: record.identifier.hexString,
-                        payloadPreview: preview,
-                        payloadLength: record.payload.count
-                    )
-                } ?? []
+                        return NDEFRecordSummary(
+                            typeNameFormat: String(describing: record.typeNameFormat),
+                            type: type,
+                            identifierHex: record.identifier.hexString,
+                            payloadPreview: preview,
+                            payloadLength: record.payload.count
+                        )
+                    }
+                } else {
+                    records = []
+                }
 
                 finish.call(NDEFMetadata(access: access, capacity: capacity, records: records))
             }

@@ -71,7 +71,7 @@ final class NFCScanner: NSObject, ObservableObject {
         activationWatchdog = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 5_000_000_000)
             guard !Task.isCancelled else { return }
-            await self?.activationTimedOut()
+            self?.activationTimedOut()
         }
     }
 
@@ -80,7 +80,7 @@ final class NFCScanner: NSObject, ObservableObject {
         sessionWatchdog = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 55_000_000_000)
             guard !Task.isCancelled else { return }
-            await self?.sessionTimedOut()
+            self?.sessionTimedOut()
         }
     }
 
@@ -132,7 +132,7 @@ final class NFCScanner: NSObject, ObservableObject {
                 details: [
                     "Historical Bytes": iso7816.historicalBytes?.hexString ?? "—",
                     "Application Data": iso7816.applicationData?.hexString ?? "—",
-                    "Initial AID": iso7816.initialSelectedAID ?? "—"
+                    "Initial AID": iso7816.initialSelectedAID
                 ]
             )
 
