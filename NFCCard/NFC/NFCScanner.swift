@@ -5,11 +5,47 @@ import CoreNFC
 final class NFCScanner: NSObject, ObservableObject {
     @Published private(set) var isScanning = false
     @Published private(set) var statusMessage = "Ready"
+    @Published private(set) var currentScanProfile = "Idle"
     @Published var lastCard: NFCCardProfile?
     @Published var log: [String] = []
     @Published var errorMessage: String?
 
     weak var library: CardLibraryStore?
+
+    private enum ScanProfile {
+        case standard
+        case felica
+
+        var title: String {
+            switch self {
+            case .standard: return "Standard NFC"
+            case .felica: return "FeliCa / NFC-F"
+            }
+        }
+
+        var options: NFCTagReaderSession.PollingOption {
+            switch self {
+            case .standard:
+                // Keep NFC-F out of the default session. On some iOS/jailbreak
+                // combinations an ISO18092 polling request can invalidate the
+                // whole reader session when the configured system-code path is
+                // unavailable. ISO14443 + ISO15693 covers MIFARE, DESFire,
+                // NTAG/Ultralight, declared ISO7816 applications and NFC-V.
+                return [.iso14443, .iso15693]
+            case .felica:
+                return [.iso18092]
+            }
+        }
+
+        var prompt: String {
+            switch self {
+            case .standard:
+                return "Hold the top of your iPhone near the NFC card."
+            case .felica:
+                return "Hold the top of your iPhone near the FeliCa / NFC-F card."
+            }
+        }
+    }
 
     private let readerQueue = DispatchQueue(label: "com.rashad.nfccard.reader", qos: .userInitiated)
     private var session: NFCTagReaderSession?
@@ -18,37 +54,11 @@ final class NFCScanner: NSObject, ObservableObject {
     private var didCompleteCurrentScan = false
 
     func startScan() {
-        guard !isScanning else {
-            appendLog("Scan request ignored because a session is already active")
-            return
-        }
+        beginScan(profile: .standard)
+    }
 
-        guard NFCReaderSession.readingAvailable else {
-            errorMessage = "NFC reading is not available on this device."
-            statusMessage = "NFC unavailable"
-            return
-        }
-
-        errorMessage = nil
-        didCompleteCurrentScan = false
-        statusMessage = "Starting NFC reader…"
-
-        guard let newSession = NFCTagReaderSession(
-            pollingOption: [.iso14443, .iso15693, .iso18092],
-            delegate: self,
-            queue: readerQueue
-        ) else {
-            errorMessage = "Unable to create an NFC reader session."
-            statusMessage = "Could not start"
-            return
-        }
-
-        newSession.alertMessage = "Hold the top of your iPhone near the NFC card."
-        session = newSession
-        isScanning = true
-        appendLog("Starting NFC discovery")
-        scheduleActivationWatchdog()
-        newSession.begin()
+    func startFeliCaScan() {
+        beginScan(profile: .felica)
     }
 
     func cancelScan() {
@@ -62,14 +72,59 @@ final class NFCScanner: NSObject, ObservableObject {
         log.removeAll()
     }
 
+    private func beginScan(profile: ScanProfile) {
+        guard !isScanning else {
+            appendLog("Scan request ignored because a session is already active")
+            return
+        }
+
+        guard NFCReaderSession.readingAvailable else {
+            errorMessage = "NFC reading is not available on this device."
+            statusMessage = "NFC unavailable"
+            currentScanProfile = "Idle"
+            return
+        }
+
+        errorMessage = nil
+        didCompleteCurrentScan = false
+        currentScanProfile = profile.title
+        statusMessage = "Starting (profile.title) reader…"
+
+        guard let newSession = NFCTagReaderSession(
+            pollingOption: profile.options,
+            delegate: self,
+            queue: readerQueue
+        ) else {
+            errorMessage = "Unable to create an NFC reader session."
+            statusMessage = "Could not start"
+            currentScanProfile = "Idle"
+            return
+        }
+
+        newSession.alertMessage = profile.prompt
+        session = newSession
+        isScanning = true
+        appendLog("Starting (profile.title) discovery with (pollingDescription(profile.options))")
+        scheduleActivationWatchdog()
+        newSession.begin()
+    }
+
+    private func pollingDescription(_ options: NFCTagReaderSession.PollingOption) -> String {
+        var values: [String] = []
+        if options.contains(.iso14443) { values.append("ISO14443") }
+        if options.contains(.iso15693) { values.append("ISO15693") }
+        if options.contains(.iso18092) { values.append("ISO18092") }
+        return values.joined(separator: "+")
+    }
+
     private func appendLog(_ message: String) {
-        log.append("\(ISO8601DateFormatter().string(from: .now))  \(message)")
+        log.append("(ISO8601DateFormatter().string(from: .now))  (message)")
     }
 
     private func scheduleActivationWatchdog() {
         activationWatchdog?.cancel()
         activationWatchdog = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            try? await Task.sleep(nanoseconds: 8_000_000_000)
             guard !Task.isCancelled else { return }
             self?.activationTimedOut()
         }
@@ -86,8 +141,8 @@ final class NFCScanner: NSObject, ObservableObject {
 
     private func activationTimedOut() {
         guard isScanning else { return }
-        appendLog("Reader session did not become active within 5 seconds")
-        errorMessage = "The NFC reader did not become active. Open Runtime Diagnostics to verify the NFC entitlement and bundle configuration."
+        appendLog("Reader session did not become active within 8 seconds")
+        errorMessage = "The NFC reader did not become active. Open Runtime Diagnostics to verify Core NFC availability and the packaged TAG entitlement."
         statusMessage = "Reader activation failed"
         session?.invalidate()
     }
@@ -108,6 +163,7 @@ final class NFCScanner: NSObject, ObservableObject {
         isScanning = false
         if releaseSession {
             session = nil
+            currentScanProfile = "Idle"
         }
     }
 
@@ -170,12 +226,12 @@ final class NFCScanner: NSObject, ObservableObject {
         lastCard = enriched
         library?.save(enriched)
 
-        appendLog("Detected \(enriched.technology) UID=\(enriched.uidHex ?? "—")")
-        appendLog("Card Genome \(String((enriched.genome ?? "").prefix(16)).uppercased())")
+        appendLog("Detected (enriched.technology) UID=(enriched.uidHex ?? "—")")
+        appendLog("Card Genome (String((enriched.genome ?? "").prefix(16)).uppercased())")
         if let ndef = enriched.ndef {
-            appendLog("NDEF \(ndef.access.rawValue), capacity=\(ndef.capacity), records=\(ndef.records.count)")
+            appendLog("NDEF (ndef.access.rawValue), capacity=(ndef.capacity), records=(ndef.records.count)")
         }
-        appendLog("Matched modules: \(enriched.matchedModules.joined(separator: ", "))")
+        appendLog("Matched modules: (enriched.matchedModules.joined(separator: ", "))")
 
         didCompleteCurrentScan = true
         statusMessage = "Card analyzed"
@@ -231,12 +287,12 @@ extension NFCScanner: NFCTagReaderSessionDelegate {
                 } else {
                     self.statusMessage = "Scan ended"
                     self.errorMessage = message
-                    self.appendLog("Session ended: \(message)")
+                    self.appendLog("Session ended: (message)")
                 }
             } else {
                 self.statusMessage = "Scan ended"
                 self.errorMessage = error.localizedDescription
-                self.appendLog("Session ended: \(error.localizedDescription)")
+                self.appendLog("Session ended: (error.localizedDescription)")
             }
         }
     }
