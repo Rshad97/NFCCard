@@ -25,32 +25,39 @@ struct RuntimeDiagnosticsView: View {
 
             Section("Bundle Configuration") {
                 LabeledContent("Usage description", value: usageDescription?.isEmpty == false ? "Present" : "Missing")
-                LabeledContent("ISO 7816 AIDs", value: "\(iso7816AIDs.count)")
-                LabeledContent("FeliCa system codes", value: "\(felicaSystemCodes.count)")
+                LabeledContent("ISO 7816 AIDs", value: "(iso7816AIDs.count)")
+                LabeledContent("FeliCa system codes", value: "(felicaSystemCodes.count)")
 
                 if !iso7816AIDs.isEmpty {
-                    ForEach(iso7816AIDs, id: \.self) { aid in
+                    ForEach(iso7816AIDs, id: .self) { aid in
                         Text(aid).font(.caption.monospaced()).textSelection(.enabled)
                     }
                 }
 
                 if !felicaSystemCodes.isEmpty {
-                    ForEach(felicaSystemCodes, id: \.self) { code in
-                        Text("FeliCa \(code)").font(.caption.monospaced()).textSelection(.enabled)
+                    ForEach(felicaSystemCodes, id: .self) { code in
+                        Text("FeliCa (code)").font(.caption.monospaced()).textSelection(.enabled)
                     }
                 }
             }
 
             Section("Session") {
                 LabeledContent("Scanning", value: scanner.isScanning ? "Yes" : "No")
+                LabeledContent("Profile", value: scanner.currentScanProfile)
                 Text(scanner.statusMessage).foregroundStyle(.secondary)
                 if let error = scanner.errorMessage {
                     Text(error).foregroundStyle(.red)
                 }
             }
 
+            Section("Polling Strategy") {
+                Text("Analyze NFC Card uses ISO 14443 + ISO 15693. This covers MIFARE/DESFire/NTAG/Ultralight, declared ISO 7816 applications and NFC-V.")
+                Text("FeliCa/NFC-F uses a separate ISO 18092 session so an NFC-F entitlement/system-code problem cannot block the standard reader.")
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Local Storage") {
-                LabeledContent("Saved cards", value: "\(library.cards.count)")
+                LabeledContent("Saved cards", value: "(library.cards.count)")
                 if let error = library.storageError {
                     Text(error).foregroundStyle(.red)
                 } else {
@@ -59,7 +66,7 @@ struct RuntimeDiagnosticsView: View {
             }
 
             Section {
-                Text("The GitHub build also validates that the packaged executable contains the Core NFC TAG entitlement before publishing the DEB.")
+                Text("The GitHub build validates that the final packaged executable contains the Core NFC TAG entitlement and that the app bundle contains the usage description, discovery identifiers, and compiled black/blue AppIcon.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
