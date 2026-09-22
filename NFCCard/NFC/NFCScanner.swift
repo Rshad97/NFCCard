@@ -26,11 +26,6 @@ final class NFCScanner: NSObject, ObservableObject {
         var options: NFCTagReaderSession.PollingOption {
             switch self {
             case .standard:
-                // Keep NFC-F out of the default session. On some iOS/jailbreak
-                // combinations an ISO18092 polling request can invalidate the
-                // whole reader session when the configured system-code path is
-                // unavailable. ISO14443 + ISO15693 covers MIFARE, DESFire,
-                // NTAG/Ultralight, declared ISO7816 applications and NFC-V.
                 return [.iso14443, .iso15693]
             case .felica:
                 return [.iso18092]
@@ -88,7 +83,7 @@ final class NFCScanner: NSObject, ObservableObject {
         errorMessage = nil
         didCompleteCurrentScan = false
         currentScanProfile = profile.title
-        statusMessage = "Starting (profile.title) reader…"
+        statusMessage = "Starting " + profile.title + " reader…"
 
         guard let newSession = NFCTagReaderSession(
             pollingOption: profile.options,
@@ -104,7 +99,7 @@ final class NFCScanner: NSObject, ObservableObject {
         newSession.alertMessage = profile.prompt
         session = newSession
         isScanning = true
-        appendLog("Starting (profile.title) discovery with (pollingDescription(profile.options))")
+        appendLog("Starting " + profile.title + " discovery with " + pollingDescription(profile.options))
         scheduleActivationWatchdog()
         newSession.begin()
     }
@@ -118,7 +113,7 @@ final class NFCScanner: NSObject, ObservableObject {
     }
 
     private func appendLog(_ message: String) {
-        log.append("(ISO8601DateFormatter().string(from: .now))  (message)")
+        log.append(ISO8601DateFormatter().string(from: .now) + "  " + message)
     }
 
     private func scheduleActivationWatchdog() {
@@ -226,12 +221,12 @@ final class NFCScanner: NSObject, ObservableObject {
         lastCard = enriched
         library?.save(enriched)
 
-        appendLog("Detected (enriched.technology) UID=(enriched.uidHex ?? "—")")
-        appendLog("Card Genome (String((enriched.genome ?? "").prefix(16)).uppercased())")
+        appendLog("Detected " + enriched.technology + " UID=" + (enriched.uidHex ?? "—"))
+        appendLog("Card Genome " + String((enriched.genome ?? "").prefix(16)).uppercased())
         if let ndef = enriched.ndef {
-            appendLog("NDEF (ndef.access.rawValue), capacity=(ndef.capacity), records=(ndef.records.count)")
+            appendLog("NDEF " + ndef.access.rawValue + ", capacity=" + String(ndef.capacity) + ", records=" + String(ndef.records.count))
         }
-        appendLog("Matched modules: (enriched.matchedModules.joined(separator: ", "))")
+        appendLog("Matched modules: " + enriched.matchedModules.joined(separator: ", "))
 
         didCompleteCurrentScan = true
         statusMessage = "Card analyzed"
@@ -287,12 +282,12 @@ extension NFCScanner: NFCTagReaderSessionDelegate {
                 } else {
                     self.statusMessage = "Scan ended"
                     self.errorMessage = message
-                    self.appendLog("Session ended: (message)")
+                    self.appendLog("Session ended: " + message)
                 }
             } else {
                 self.statusMessage = "Scan ended"
                 self.errorMessage = error.localizedDescription
-                self.appendLog("Session ended: (error.localizedDescription)")
+                self.appendLog("Session ended: " + error.localizedDescription)
             }
         }
     }
