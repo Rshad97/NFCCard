@@ -1,0 +1,7 @@
+.DS_Store
+DerivedData/
+.build/
+.swiftpm/
+xcuserdata/
+*.xcuserstate
+NFCCard.xcodeproj/project.xcworkspace/xcuserdata/
