@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: nfccard-distribution
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: macos-15
@@ -60,7 +64,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          VERSION="0.2.2"
+          VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' NFCCard/Info.plist)"
           ROOT="$RUNNER_TEMP/nfccard-package"
           APP="$PWD/build/Build/Products/Release-iphoneos/NFCCard.app"
           OUT="$PWD/packages"
