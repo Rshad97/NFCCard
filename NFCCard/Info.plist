@@ -13,9 +13,9 @@
 	<key>CFBundleName</key>
 	<string>NFCCard</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.2.1</string>
+	<string>0.2.2</string>
 	<key>CFBundleVersion</key>
-	<string>3</string>
+	<string>4</string>
 	<key>NFCReaderUsageDescription</key>
 	<string>NFCCard uses NFC to identify and inspect compatible cards and tags.</string>
 	<key>UILaunchScreen</key>
