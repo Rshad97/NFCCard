@@ -23,6 +23,10 @@ jobs:
         run: |
           brew install xcodegen ldid dpkg
 
+      - name: Prepare app icon
+        run: |
+          sh ./scripts/prepare-app-icon.sh
+
       - name: Generate Xcode project
         run: xcodegen generate
 
@@ -40,16 +44,22 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             build
 
-      - name: Validate app metadata
+      - name: Validate app metadata and icon
         run: |
           set -euo pipefail
           APP="$PWD/build/Build/Products/Release-iphoneos/NFCCard.app"
+          SOURCE_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' NFCCard/Info.plist)"
+          APP_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist")"
+
           test -d "$APP"
           test -f "$APP/NFCCard"
+          test "$APP_VERSION" = "$SOURCE_VERSION"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")" = "com.rashad.nfccard"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist")" = "0.2.2"
           /usr/libexec/PlistBuddy -c 'Print :NFCReaderUsageDescription' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :com.apple.developer.nfc.readersession.iso7816.select-identifiers' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :com.apple.developer.nfc.readersession.felica.systemcodes' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :UIRequiredDeviceCapabilities' "$APP/Info.plist"
+          test -f "$APP/Assets.car"
           plutil -p "$APP/Info.plist"
 
       - name: Sign jailbreak app entitlements
@@ -57,7 +67,10 @@ jobs:
           set -euo pipefail
           APP="$PWD/build/Build/Products/Release-iphoneos/NFCCard.app"
           ldid -SNFCCard/NFCCard.entitlements "$APP/NFCCard"
-          /usr/bin/codesign -d --entitlements :- "$APP/NFCCard" 2>/dev/null || true
+          ldid -e "$APP/NFCCard" > "$RUNNER_TEMP/NFCCard.entitlements.plist"
+          cat "$RUNNER_TEMP/NFCCard.entitlements.plist"
+          grep -q 'com.apple.developer.nfc.readersession.formats' "$RUNNER_TEMP/NFCCard.entitlements.plist"
+          grep -q 'TAG' "$RUNNER_TEMP/NFCCard.entitlements.plist"
 
       - name: Build rootless DEB
         shell: bash
@@ -78,12 +91,13 @@ jobs:
           Name: NFCCard
           Version: $VERSION
           Architecture: iphoneos-arm64
-          Description: NFC research and interoperability toolkit with Card Genome, Capability Map, Privacy Radar, Protocol Lens and Wallet Route Advisor.
+          Description: NFC research and interoperability toolkit with Protocol Atlas, Card Genome, Capability Map, Privacy Radar and Wallet Route Advisor.
           Maintainer: Rashad
           Author: Rashad
           Section: Applications
           Depends: firmware (>= 16.0)
           Homepage: https://github.com/Rshad97/NFCCard
+          Icon: https://raw.githubusercontent.com/Rshad97/NFCCard/main/design/AppIconSource.png
           EOF
           sed -i '' 's/^          //' "$ROOT/DEBIAN/control"
 
@@ -139,34 +153,37 @@ jobs:
           MAINTAINER="$(dpkg-deb -f "$DEB" Maintainer)"
           SECTION="$(dpkg-deb -f "$DEB" Section)"
           DEPENDS="$(dpkg-deb -f "$DEB" Depends)"
+          ICON="$(dpkg-deb -f "$DEB" Icon 2>/dev/null || true)"
           SIZE="$(stat -f%z "$DEB")"
           MD5="$(md5 -q "$DEB")"
           SHA1="$(shasum -a 1 "$DEB" | awk '{print $1}')"
           SHA256="$(shasum -a 256 "$DEB" | awk '{print $1}')"
           SHA512="$(shasum -a 512 "$DEB" | awk '{print $1}')"
 
-          cat > "$REPO/Packages" <<EOF
-          Package: $PKG
-          Name: $NAME
-          Version: $VERSION
-          Architecture: $ARCH
-          Description: $DESC
-          Maintainer: $MAINTAINER
-          Section: $SECTION
-          Depends: $DEPENDS
-          Homepage: https://github.com/Rshad97/NFCCard
-          Filename: ./debs/$DEB_NAME
-          Size: $SIZE
-          MD5sum: $MD5
-          SHA1: $SHA1
-          SHA256: $SHA256
-          SHA512: $SHA512
-
-          EOF
-          sed -i '' 's/^          //' "$REPO/Packages"
+          {
+            echo "Package: $PKG"
+            echo "Name: $NAME"
+            echo "Version: $VERSION"
+            echo "Architecture: $ARCH"
+            echo "Description: $DESC"
+            echo "Maintainer: $MAINTAINER"
+            echo "Section: $SECTION"
+            echo "Depends: $DEPENDS"
+            echo "Homepage: https://github.com/Rshad97/NFCCard"
+            [ -n "$ICON" ] && echo "Icon: $ICON"
+            echo "Filename: ./debs/$DEB_NAME"
+            echo "Size: $SIZE"
+            echo "MD5sum: $MD5"
+            echo "SHA1: $SHA1"
+            echo "SHA256: $SHA256"
+            echo "SHA512: $SHA512"
+            echo
+          } > "$REPO/Packages"
 
           gzip -9c "$REPO/Packages" > "$REPO/Packages.gz"
           bzip2 -9c "$REPO/Packages" > "$REPO/Packages.bz2"
+
+          cp design/AppIconSource.png "$REPO/icon.png"
 
           cat > "$REPO/Release" <<'EOF'
           Origin: NFCCard

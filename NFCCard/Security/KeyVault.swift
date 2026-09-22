@@ -25,30 +25,28 @@ actor KeyVault {
     private init() {}
 
     func save(secret: Data, for entry: KeyVaultEntry) throws {
-        let account = entry.id.uuidString
-        let base: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account
+        let query = baseQuery(for: entry)
+        let update: [String: Any] = [
+            kSecValueData as String: secret,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         ]
-        SecItemDelete(base as CFDictionary)
 
-        var add = base
+        let updateStatus = SecItemUpdate(query as CFDictionary, update as CFDictionary)
+        if updateStatus == errSecSuccess { return }
+        guard updateStatus == errSecItemNotFound else { throw KeyVaultError.osStatus(updateStatus) }
+
+        var add = query
         add[kSecValueData as String] = secret
         add[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
 
-        let status = SecItemAdd(add as CFDictionary, nil)
-        guard status == errSecSuccess else { throw KeyVaultError.osStatus(status) }
+        let addStatus = SecItemAdd(add as CFDictionary, nil)
+        guard addStatus == errSecSuccess else { throw KeyVaultError.osStatus(addStatus) }
     }
 
     func secret(for entry: KeyVaultEntry) throws -> Data? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: entry.id.uuidString,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
+        var query = baseQuery(for: entry)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
 
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
@@ -58,13 +56,18 @@ actor KeyVault {
     }
 
     func delete(_ entry: KeyVaultEntry) throws {
-        let query: [String: Any] = [
+        let status = SecItemDelete(baseQuery(for: entry) as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw KeyVaultError.osStatus(status)
+        }
+    }
+
+    private func baseQuery(for entry: KeyVaultEntry) -> [String: Any] {
+        [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: entry.id.uuidString
         ]
-        let status = SecItemDelete(query as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else { throw KeyVaultError.osStatus(status) }
     }
 }
 

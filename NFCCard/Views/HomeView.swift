@@ -13,6 +13,21 @@ struct HomeView: View {
                         Label(scanner.isScanning ? "Scanning…" : "Analyze NFC Card", systemImage: "wave.3.right.circle.fill")
                     }
                     .disabled(scanner.isScanning)
+
+                    if scanner.isScanning {
+                        Button("Cancel Scan", role: .destructive) {
+                            scanner.cancelScan()
+                        }
+                    }
+
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Status")
+                        Spacer()
+                        Text(scanner.statusMessage)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.trailing)
+                    }
                 } footer: {
                     Text("NFCCard performs a read-only discovery pass first: identity, public metadata, NDEF capability, protocol modules, Card Genome and privacy signals.")
                 }
@@ -35,6 +50,9 @@ struct HomeView: View {
                     }
 
                     Section("Intelligence") {
+                        NavigationLink("Protocol Atlas") {
+                            ProtocolAtlasView(card: card)
+                        }
                         NavigationLink("Capability Map") {
                             CapabilityMapView(card: card)
                         }
@@ -48,6 +66,9 @@ struct HomeView: View {
                 }
 
                 Section("Diagnostics") {
+                    NavigationLink("Runtime Diagnostics") {
+                        RuntimeDiagnosticsView()
+                    }
                     NavigationLink("Session Flight Recorder") {
                         LogView()
                     }

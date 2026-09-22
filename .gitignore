@@ -1,7 +1,10 @@
 .DS_Store
 DerivedData/
+build/
+packages/
 .build/
 .swiftpm/
 xcuserdata/
 *.xcuserstate
-NFCCard.xcodeproj/project.xcworkspace/xcuserdata/
+NFCCard.xcodeproj/
+NFCCard/Assets.xcassets/AppIcon.appiconset/AppIcon.png

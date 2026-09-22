@@ -3,26 +3,43 @@ import CoreNFC
 
 @MainActor
 final class NFCScanner: NSObject, ObservableObject {
-    @Published var isScanning = false
+    @Published private(set) var isScanning = false
+    @Published private(set) var statusMessage = "Ready"
     @Published var lastCard: NFCCardProfile?
     @Published var log: [String] = []
     @Published var errorMessage: String?
 
     weak var library: CardLibraryStore?
+
+    private let readerQueue = DispatchQueue(label: "com.rashad.nfccard.reader", qos: .userInitiated)
     private var session: NFCTagReaderSession?
+    private var activationWatchdog: Task<Void, Never>?
+    private var sessionWatchdog: Task<Void, Never>?
+    private var didCompleteCurrentScan = false
 
     func startScan() {
-        guard NFCReaderSession.readingAvailable else {
-            errorMessage = "NFC reading is not available on this device."
+        guard !isScanning else {
+            appendLog("Scan request ignored because a session is already active")
             return
         }
+
+        guard NFCReaderSession.readingAvailable else {
+            errorMessage = "NFC reading is not available on this device."
+            statusMessage = "NFC unavailable"
+            return
+        }
+
+        errorMessage = nil
+        didCompleteCurrentScan = false
+        statusMessage = "Starting NFC reader…"
 
         guard let newSession = NFCTagReaderSession(
             pollingOption: [.iso14443, .iso15693, .iso18092],
             delegate: self,
-            queue: nil
+            queue: readerQueue
         ) else {
             errorMessage = "Unable to create an NFC reader session."
+            statusMessage = "Could not start"
             return
         }
 
@@ -30,7 +47,15 @@ final class NFCScanner: NSObject, ObservableObject {
         session = newSession
         isScanning = true
         appendLog("Starting NFC discovery")
+        scheduleActivationWatchdog()
         newSession.begin()
+    }
+
+    func cancelScan() {
+        guard let session else { return }
+        appendLog("User requested scan cancellation")
+        statusMessage = "Canceling…"
+        session.invalidate()
     }
 
     func clearLog() {
@@ -39,6 +64,51 @@ final class NFCScanner: NSObject, ObservableObject {
 
     private func appendLog(_ message: String) {
         log.append("\(ISO8601DateFormatter().string(from: .now))  \(message)")
+    }
+
+    private func scheduleActivationWatchdog() {
+        activationWatchdog?.cancel()
+        activationWatchdog = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            guard !Task.isCancelled else { return }
+            await self?.activationTimedOut()
+        }
+    }
+
+    private func scheduleSessionWatchdog() {
+        sessionWatchdog?.cancel()
+        sessionWatchdog = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 55_000_000_000)
+            guard !Task.isCancelled else { return }
+            await self?.sessionTimedOut()
+        }
+    }
+
+    private func activationTimedOut() {
+        guard isScanning else { return }
+        appendLog("Reader session did not become active within 5 seconds")
+        errorMessage = "The NFC reader did not become active. Open Runtime Diagnostics to verify the NFC entitlement and bundle configuration."
+        statusMessage = "Reader activation failed"
+        session?.invalidate()
+    }
+
+    private func sessionTimedOut() {
+        guard isScanning else { return }
+        appendLog("Reader session watchdog reached 55 seconds")
+        errorMessage = "The NFC session timed out. Try again and keep one card near the top of the iPhone."
+        statusMessage = "Session timed out"
+        session?.invalidate()
+    }
+
+    private func resetSessionState(releaseSession: Bool = true) {
+        activationWatchdog?.cancel()
+        activationWatchdog = nil
+        sessionWatchdog?.cancel()
+        sessionWatchdog = nil
+        isScanning = false
+        if releaseSession {
+            session = nil
+        }
     }
 
     private func baseProfile(for tag: NFCTag) -> NFCCardProfile {
@@ -107,23 +177,65 @@ final class NFCScanner: NSObject, ObservableObject {
         }
         appendLog("Matched modules: \(enriched.matchedModules.joined(separator: ", "))")
 
+        didCompleteCurrentScan = true
+        statusMessage = "Card analyzed"
         session.alertMessage = "Card analyzed"
+        resetSessionState(releaseSession: false)
         session.invalidate()
+    }
+
+    private func friendlyMessage(for error: NFCReaderError) -> String {
+        switch error.code {
+        case .readerSessionInvalidationErrorUserCanceled:
+            return "NFC scan canceled."
+        case .readerSessionInvalidationErrorSessionTimeout:
+            return "The NFC reader session timed out."
+        case .readerSessionInvalidationErrorSystemIsBusy:
+            return "NFC is currently busy. Close other NFC/Wallet operations and try again."
+        case .readerSessionInvalidationErrorFirstNDEFTagRead:
+            return "NFC session completed."
+        default:
+            return error.localizedDescription
+        }
     }
 }
 
 extension NFCScanner: NFCTagReaderSessionDelegate {
     nonisolated func tagReaderSessionDidBecomeActive(_ session: NFCTagReaderSession) {
         Task { @MainActor in
+            self.activationWatchdog?.cancel()
+            self.activationWatchdog = nil
+            self.statusMessage = "Ready for card"
             self.appendLog("Reader session active")
+            self.scheduleSessionWatchdog()
         }
     }
 
     nonisolated func tagReaderSession(_ session: NFCTagReaderSession, didInvalidateWithError error: Error) {
         Task { @MainActor in
-            self.isScanning = false
-            let readerError = error as? NFCReaderError
-            if readerError?.code != .readerSessionInvalidationErrorUserCanceled {
+            let completed = self.didCompleteCurrentScan
+            self.resetSessionState()
+
+            if completed {
+                self.didCompleteCurrentScan = false
+                self.statusMessage = "Card analyzed"
+                return
+            }
+
+            if let readerError = error as? NFCReaderError {
+                let message = self.friendlyMessage(for: readerError)
+
+                if readerError.code == .readerSessionInvalidationErrorUserCanceled {
+                    self.statusMessage = "Scan canceled"
+                    self.appendLog("Session canceled by user")
+                } else {
+                    self.statusMessage = "Scan ended"
+                    self.errorMessage = message
+                    self.appendLog("Session ended: \(message)")
+                }
+            } else {
+                self.statusMessage = "Scan ended"
+                self.errorMessage = error.localizedDescription
                 self.appendLog("Session ended: \(error.localizedDescription)")
             }
         }
@@ -138,6 +250,11 @@ extension NFCScanner: NFCTagReaderSessionDelegate {
             return
         }
 
+        Task { @MainActor in
+            self.statusMessage = "Card detected — connecting…"
+            self.appendLog("Tag detected")
+        }
+
         session.connect(to: tag) { error in
             if let error {
                 session.invalidate(errorMessage: error.localizedDescription)
@@ -145,6 +262,7 @@ extension NFCScanner: NFCTagReaderSessionDelegate {
             }
 
             Task { @MainActor in
+                self.statusMessage = "Reading public metadata…"
                 self.appendLog("Connected to tag; collecting public protocol metadata")
                 var card = self.baseProfile(for: tag)
 

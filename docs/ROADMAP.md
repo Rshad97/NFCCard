@@ -1,75 +1,77 @@
 # NFCCard Roadmap
 
-## 0.2 — Genome
+## 0.3 — Protocol Atlas / reliability
 
-- [x] Card Genome public-metadata fingerprint
-- [x] Capability Map
-- [x] Privacy Radar
-- [x] NDEF public-record inspection
-- [x] Protocol Lens registry
-- [x] Local Card Library
-- [x] Session Flight Recorder
-- [x] Keychain-backed authorized key foundation
-- [x] Wallet Route Advisor
+- [x] scanner lifecycle watchdogs
+- [x] user-visible NFC errors
+- [x] NDEF operation timeout
+- [x] Runtime Diagnostics
+- [x] stable Protocol Atlas UI
+- [x] evidence/confidence model
+- [x] MIFARE family classification foundation
+- [x] ISO 7816 classification foundation
+- [x] ISO 15693 classification foundation
+- [x] FeliCa classification foundation
+- [x] black/blue app icon
+- [x] rootless/Sileo package verification
 
-## 0.3 — Protocol Atlas
-
-- [ ] Stronger MIFARE family classification
-- [ ] NTAG / Ultralight version and memory-layout inspector
-- [ ] ISO 15693 system-information inspector
-- [ ] FeliCa specification/system-code inspector for explicitly configured system codes
+Next:
+- [ ] NTAG / Ultralight GET_VERSION inspector
+- [ ] ISO 15693 Get System Information inspector
+- [ ] FeliCa request-system-code inspector for declared systems
 - [ ] Type 2 / Type 4 / Type 5 NDEF structure visualization
-- [ ] Read-only DESFire application/file metadata discovery when access conditions permit
-- [ ] Protocol confidence score with evidence trail
+- [ ] read-only DESFire version/application metadata discovery where access conditions permit
+- [ ] richer product-revision knowledge base from published standards/vendor metadata
 
 ## 0.4 — Snapshot Diff
 
-- [ ] Compare two scans by Card Genome
-- [ ] Highlight changes in NDEF, memory metadata and configuration
-- [ ] Timeline per locally saved card profile
-- [ ] Redaction controls before export
-- [ ] JSON diagnostic bundle export
+- [ ] compare two snapshots
+- [ ] highlight NDEF/configuration changes
+- [ ] timeline per Card Genome
+- [ ] redaction controls
+- [ ] JSON diagnostic export
+- [ ] export/import schema versioning
 
 ## 0.5 — NDEF Studio
 
-- [ ] Compose URI, Text, MIME and External Type records
-- [ ] Preview exact bytes before writing
-- [ ] Explicit write confirmation
-- [ ] Lock-state warning and irreversible-operation protection
-- [ ] Write verification pass
+- [ ] compose URI, Text, MIME, and External Type records
+- [ ] exact-byte preview
+- [ ] explicit write confirmation
+- [ ] lock-state and irreversible-operation warnings
+- [ ] post-write verification
 
 ## 0.6 — Authorized Secure Sessions
 
 - [ ] Key Vault UI
-- [ ] AES-128 / DES / 2K3DES / 3K3DES crypto provider abstraction
-- [ ] User-authorized DESFire authentication adapters
-- [ ] Secure-session transcript redaction
-- [ ] No default keys, no brute force, no credential extraction
+- [ ] AES-128 / DES / 2K3DES / 3K3DES provider abstraction
+- [ ] user-authorized DESFire authentication adapters
+- [ ] secure-session transcript redaction
+- [ ] no default-key spraying
+- [ ] no brute force
+- [ ] no credential extraction
 
 ## 0.7 — Wallet Studio
 
 - [ ] Wallet pass design model
-- [ ] Barcode/QR/Aztec/PDF417 route
-- [ ] PassKit signing workflow integration point
+- [ ] QR / Aztec / PDF417 / Code 128 route
+- [ ] PassKit signing integration point
 - [ ] VAS eligibility checklist
-- [ ] NFC & SE Platform eligibility checklist
-- [ ] CardSession eligibility diagnostics where API/entitlement is available
+- [ ] NFC & Secure Element Platform checklist
+- [ ] CardSession eligibility diagnostics
 
 ## 0.8 — Protocol Packs
 
-Apple requires explicit ISO 7816 AIDs and FeliCa system codes. NFCCard will expose transparent build-time protocol packs instead of pretending wildcard discovery is possible.
-
-- [ ] Public standards pack
-- [ ] User-defined AID pack
-- [ ] User-defined FeliCa system-code pack
-- [ ] Generated Info.plist configuration
-- [ ] Pack validation and duplicate detection
+- [ ] public standards AID pack
+- [ ] user-defined AID configuration
+- [ ] user-defined FeliCa system-code configuration
+- [ ] validated generated Info.plist configuration
+- [ ] duplicate/conflict detection
 
 ## 1.0 — NFCCard Platform
 
-- [ ] Stable plugin SDK
-- [ ] Offline card-family knowledge base
-- [ ] Evidence-based identification engine
-- [ ] Card Genome comparison database stored locally
-- [ ] Signed diagnostic exports
-- [ ] Public documentation and test-card matrix
+- [ ] stable plugin SDK
+- [ ] offline card-family knowledge base
+- [ ] evidence-based identification engine
+- [ ] local Card Genome comparison database
+- [ ] signed diagnostic exports
+- [ ] public test-card matrix
