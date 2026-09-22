@@ -4,9 +4,9 @@ NFCCard is an open-source iPhone NFC research and interoperability toolkit. It i
 
 The project is protocol-first and vendor-neutral. It contains no dependency on a specific access-control deployment, issuer, reader vendor, or private infrastructure.
 
-## Current release — 0.3.0
+## Current release — 0.3.1
 
-NFCCard 0.3.0 focuses on scan reliability, diagnostics, and the first stable **Protocol Atlas** release.
+NFCCard 0.3.1 focuses on reader-session compatibility, diagnostics, and the stable **Protocol Atlas** release.
 
 Implemented:
 
@@ -31,7 +31,7 @@ Implemented:
 
 ## Scan reliability
 
-The reader lifecycle is guarded by activation and session watchdogs. Errors are shown in the app instead of leaving the interface indefinitely in a scanning state. NDEF inspection also has its own timeout so a slow or incompatible tag cannot block the whole analysis pipeline.
+The standard reader now polls ISO 14443 + ISO 15693, while FeliCa/NFC-F runs in a separate ISO 18092 session. This isolates NFC-F system-code/configuration failures from the main MIFARE/DESFire/NTAG/ISO15693 path. The reader lifecycle is also guarded by activation and session watchdogs, and NDEF inspection has its own timeout.
 
 Runtime Diagnostics shows whether Core NFC is available and whether the bundle contains the required usage description and configured discovery identifiers.
 
