@@ -11,7 +11,8 @@ final class NFCCardUITests: XCTestCase {
             let error = app.staticTexts["scan.error"]
             XCTAssertTrue(error.waitForExistence(timeout: 12))
             XCTAssertTrue(error.label.contains("not available"))
-            XCTAssertTrue(scan.isEnabled)
+            let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: scan)
+            XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 5), .completed)
             app.buttons["scan.dismiss-error"].tap()
         }
         let attachment = XCTAttachment(screenshot: app.screenshot())

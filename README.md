@@ -4,9 +4,11 @@ NFCCard is an open-source iPhone NFC research and interoperability toolkit. It i
 
 The project is protocol-first and vendor-neutral. It contains no dependency on a specific access-control deployment, issuer, reader vendor, or private infrastructure.
 
-## Current release — 0.3.3
+## Current release — 0.3.4
 
-NFCCard 0.3.3 fixes scan recovery when Core NFC never replies, moves all NFC calls off the UI executor, and requests Restart SpringBoard through Sileo after installation. The 0.3.2 icon is unchanged.
+NFCCard 0.3.4 addresses reader activation failures with consistent signing identity, a dedicated jailbreak signing profile, separate Core NFC callback/command queues, and confirmed cleanup before retries. Runtime diagnostics now include the installed process's NFC entitlement and the last completed startup stage. The approved icon and Sileo Restart SpringBoard action are unchanged.
+
+After updating, use Sileo's **Restart SpringBoard**, open NFCCard and scan once. If the NFC service never confirms closure, the app asks you to close it from the app switcher and reopen it; repeated taps cannot enqueue more stuck sessions. Share the new diagnostic report if activation still fails. Physical NFC reading on the target jailbreak still requires a device check; automated tests cannot prove that the system grants reader access.
 
 Implemented:
 
@@ -107,7 +109,7 @@ The icon preparation step validates and copies the committed 1024×1024 black/bl
 
 A physical NFC-capable iPhone is required for real tag scanning.
 
-GitHub Actions builds the device app, validates NFC metadata and the app icon, applies and verifies the jailbreak TAG entitlement, packages a rootless DEB, and publishes the standalone Sileo metadata.
+GitHub Actions builds the device app, validates NFC metadata and the app icon, signs with `packaging/NFCCard-jailbreak.entitlements` and the explicit `com.rashad.nfccard` identifier, and verifies the actual signature again inside the extracted rootless DEB before publishing Sileo metadata.
 
 ## Installation
 
@@ -128,6 +130,7 @@ Package ID: `com.rashad.nfccard`.
 - `docs/AUDIT_0.3.0.md`
 - `docs/AUDIT_0.3.2.md`
 - `docs/AUDIT_0.3.3.md`
+- `docs/AUDIT_0.3.4.md`
 - `docs/ROADMAP.md`
 
 ## License

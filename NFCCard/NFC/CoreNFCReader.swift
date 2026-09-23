@@ -1,7 +1,8 @@
 import Foundation
 import CoreNFC
 
-/// Owns every Core NFC object on one serial worker queue, never the MainActor.
+/// Commands run off the MainActor. Core NFC has its OWN delegate queue so a
+/// framework command cannot wait for a callback on the queue it is blocking.
 final class CoreNFCReader: NSObject, NFCReaderDriving, NFCTagReaderSessionDelegate {
     private let queue = DispatchQueue(label: "com.rashad.nfccard.reader", qos: .userInitiated)
     private var session: NFCTagReaderSession?
@@ -9,20 +10,37 @@ final class CoreNFCReader: NSObject, NFCReaderDriving, NFCTagReaderSessionDelega
     private var eventHandler: ((UUID, NFCReaderEvent) -> Void)?
     private var isConnecting = false
     private var inspection: NDEFInspection?
+    private var stopCompletion: (() -> Void)?
+    private var becameActive = false
 
     func start(scanID: UUID, profile: NFCScanProfile,
                eventHandler: @escaping (UUID, NFCReaderEvent) -> Void) {
         queue.async {
-            self.retireSession(message: nil)
+            guard self.scanID == nil, self.session == nil else {
+                eventHandler(scanID, .failure(.init(kind: .busy,
+                    message: "The previous NFC session has not closed yet.",
+                    diagnostic: "Rejected overlapping Core NFC session")))
+                return
+            }
             self.scanID = scanID
             self.eventHandler = eventHandler
-
+            self.becameActive = false
+            self.emit(.diagnostic("Checking Core NFC availability"))
             let available = NFCReaderSession.readingAvailable
             self.emit(.availability(available))
+            self.emit(.diagnostic("Core NFC availability check returned: \(available)"))
             guard available else {
                 self.emit(.failure(.init(kind: .unavailable,
                     message: "NFC reading is not available on this device.",
                     diagnostic: "Core NFC readingAvailable=false")))
+                return
+            }
+            let signing = NFCSigningDiagnostics.inspect()
+            self.emit(.diagnostic(signing.report))
+            if signing.missingTagEntitlement {
+                self.emit(.failure(.init(kind: .permission,
+                    message: "The installed process does not have the NFC TAG permission. Reinstall the latest package from Sileo and use Restart SpringBoard.",
+                    diagnostic: "Runtime signature is missing com.apple.developer.nfc.readersession.formats=TAG")))
                 return
             }
             guard let usage = Bundle.main.object(forInfoDictionaryKey: "NFCReaderUsageDescription") as? String,
@@ -34,35 +52,48 @@ final class CoreNFCReader: NSObject, NFCReaderDriving, NFCTagReaderSessionDelega
             }
             let polling: NFCTagReaderSession.PollingOption = profile == .standard
                 ? [.iso14443, .iso15693] : [.iso18092]
-            guard let reader = NFCTagReaderSession(pollingOption: polling, delegate: self, queue: self.queue) else {
+            self.emit(.diagnostic("Creating tag reader; polling=\(profile.title), delegate queue=Core NFC default"))
+            guard let reader = NFCTagReaderSession(pollingOption: polling, delegate: self, queue: nil) else {
                 self.emit(.failure(.init(kind: .configuration,
                     message: "Could not create an NFC reader session.", diagnostic: "NFCTagReaderSession init returned nil")))
                 return
             }
             self.session = reader
+            self.emit(.diagnostic("Tag reader created; setting prompt"))
             reader.alertMessage = "Hold the top of your iPhone near one NFC card."
+            self.emit(.diagnostic("Calling Core NFC begin"))
             reader.begin()
+            self.emit(.diagnostic("Core NFC begin returned; waiting for activation"))
         }
     }
 
-    func stop(scanID: UUID, message: String?) {
+    func stop(scanID: UUID, message: String?, completion: @escaping () -> Void) {
         queue.async {
-            guard self.scanID == scanID else { return }
-            self.retireSession(message: message)
+            guard self.scanID == scanID else { completion(); return }
+            self.inspection?.cancel()
+            self.inspection = nil
+            guard let session = self.session else {
+                self.clearOwnership()
+                completion()
+                return
+            }
+            // Keep the session alive until didInvalidate acknowledges closure.
+            // Merely returning from invalidate is not confirmation of closure.
+            self.stopCompletion = completion
+            if let message { session.invalidate(errorMessage: message) }
+            else { session.invalidate() }
         }
     }
 
-    private func retireSession(message: String?) {
+    private func clearOwnership() {
         dispatchPrecondition(condition: .onQueue(queue))
-        let previous = session
         session = nil
         scanID = nil
         eventHandler = nil
         isConnecting = false
         inspection?.cancel()
         inspection = nil
-        if let message { previous?.invalidate(errorMessage: message) }
-        else { previous?.invalidate() }
+        stopCompletion = nil
     }
 
     private func emit(_ event: NFCReaderEvent) {
@@ -71,7 +102,8 @@ final class CoreNFCReader: NSObject, NFCReaderDriving, NFCTagReaderSessionDelega
 
     func tagReaderSessionDidBecomeActive(_ session: NFCTagReaderSession) {
         queue.async {
-            guard self.session === session else { return }
+            guard self.session === session, self.stopCompletion == nil else { return }
+            self.becameActive = true
             self.emit(.active)
         }
     }
@@ -79,23 +111,30 @@ final class CoreNFCReader: NSObject, NFCReaderDriving, NFCTagReaderSessionDelega
     func tagReaderSession(_ session: NFCTagReaderSession, didInvalidateWithError error: Error) {
         queue.async {
             guard self.session === session else { return }
-            // Already invalidated: release it without calling invalidate again.
+            if let completion = self.stopCompletion {
+                self.clearOwnership()
+                completion()
+                return
+            }
+            // A spontaneous invalidation already confirms closure. Preserve
+            // ownership until the coordinator consumes the failure and stops.
             self.session = nil
             self.inspection?.cancel()
             self.inspection = nil
+            self.emit(.diagnostic("Core NFC invalidated; became active=\(self.becameActive)"))
             self.emit(.failure(Self.failure(for: error)))
         }
     }
 
     func tagReaderSession(_ session: NFCTagReaderSession, didDetect tags: [NFCTag]) {
         queue.async {
-            guard self.session === session, !self.isConnecting, let tag = tags.first else { return }
+            guard self.session === session, self.stopCompletion == nil, !self.isConnecting, let tag = tags.first else { return }
             guard tags.count == 1 else {
                 self.emit(.multipleTags)
                 session.alertMessage = "More than one card detected. Present one card only."
                 // Avoid tight repeated polling while both cards remain present.
                 self.queue.asyncAfter(deadline: .now() + 0.5) {
-                    guard self.session === session, !self.isConnecting else { return }
+                    guard self.session === session, self.stopCompletion == nil, !self.isConnecting else { return }
                     session.restartPolling()
                 }
                 return
@@ -104,7 +143,7 @@ final class CoreNFCReader: NSObject, NFCReaderDriving, NFCTagReaderSessionDelega
             self.emit(.connecting)
             session.connect(to: tag) { error in
                 self.queue.async {
-                    guard self.session === session else { return }
+                    guard self.session === session, self.stopCompletion == nil else { return }
                     if let error {
                         self.emit(.failure(Self.failure(for: error)))
                         return
@@ -112,7 +151,7 @@ final class CoreNFCReader: NSObject, NFCReaderDriving, NFCTagReaderSessionDelega
                     self.emit(.reading)
                     let card = self.baseProfile(for: tag)
                     self.inspection = NDEFInspector.inspect(tag: tag, queue: self.queue) { metadata in
-                        guard self.session === session else { return }
+                        guard self.session === session, self.stopCompletion == nil else { return }
                         var result = card
                         result.ndef = metadata
                         self.emit(.card(result))
@@ -124,7 +163,7 @@ final class CoreNFCReader: NSObject, NFCReaderDriving, NFCTagReaderSessionDelega
 
     private static func failure(for error: Error) -> NFCReaderFailure {
         let ns = error as NSError
-        let diagnostic = "\(ns.domain) (\(ns.code)): \(ns.localizedDescription)"
+        let diagnostic = NFCErrorDiagnostics.describe(ns)
         guard let reader = error as? NFCReaderError else {
             return .init(kind: .other, message: ns.localizedDescription, diagnostic: diagnostic)
         }
@@ -137,6 +176,10 @@ final class CoreNFCReader: NSObject, NFCReaderDriving, NFCTagReaderSessionDelega
             return .init(kind: .timeout, message: "The NFC session timed out. Try again.", diagnostic: diagnostic)
         case .readerErrorSecurityViolation:
             return .init(kind: .permission, message: "iOS rejected this app's NFC permission. Share the diagnostic report so the installed signature can be checked.", diagnostic: diagnostic)
+        case .readerSessionInvalidationErrorSessionTerminatedUnexpectedly:
+            return .init(kind: .interrupted,
+                message: "iOS unexpectedly ended the NFC reader session (202). Close any other NFC or Wallet session and retry once cleanup finishes. If it repeats, share the diagnostic report; this error alone does not identify a card problem.",
+                diagnostic: diagnostic)
         default:
             return .init(kind: .other, message: ns.localizedDescription, diagnostic: diagnostic)
         }

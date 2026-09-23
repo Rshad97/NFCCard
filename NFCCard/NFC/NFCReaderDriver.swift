@@ -13,13 +13,14 @@ enum NFCScanProfile {
 }
 
 struct NFCReaderFailure: Error {
-    enum Kind { case canceled, unavailable, permission, busy, timeout, configuration, other }
+    enum Kind { case canceled, unavailable, permission, busy, timeout, configuration, interrupted, other }
     let kind: Kind
     let message: String
     let diagnostic: String
 }
 
 enum NFCReaderEvent {
+    case diagnostic(String)
     case availability(Bool)
     case active
     case multipleTags
@@ -34,5 +35,7 @@ enum NFCReaderEvent {
 protocol NFCReaderDriving: AnyObject {
     func start(scanID: UUID, profile: NFCScanProfile,
                eventHandler: @escaping (UUID, NFCReaderEvent) -> Void)
-    func stop(scanID: UUID, message: String?)
+    /// Completion means the session is invalidated (or was never created), not
+    /// merely that an invalidate request has been submitted to Core NFC.
+    func stop(scanID: UUID, message: String?, completion: @escaping () -> Void)
 }

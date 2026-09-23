@@ -7,6 +7,8 @@ final class NFCScanner: ObservableObject {
     struct Timeouts {
         var activation: UInt64 = 8_000_000_000
         var session: UInt64 = 55_000_000_000
+        var cleanup: UInt64 = 4_000_000_000
+        var retryDelay: UInt64 = 750_000_000
     }
 
     @Published private(set) var phase: Phase = .idle
@@ -17,8 +19,11 @@ final class NFCScanner: ObservableObject {
     @Published private(set) var log: [String] = []
     @Published private(set) var errorMessage: String?
     @Published private(set) var errorDetails: String?
+    @Published private(set) var isRecovering = false
+    @Published private(set) var requiresRelaunch = false
 
     var isScanning: Bool { activeScanID != nil }
+    var canStartScan: Bool { !isScanning && !isRecovering && !requiresRelaunch }
     weak var library: CardLibraryStore?
 
     private let driver: NFCReaderDriving
@@ -26,6 +31,8 @@ final class NFCScanner: ObservableObject {
     private var activeScanID: UUID?
     private var activationWatchdog: Task<Void, Never>?
     private var sessionWatchdog: Task<Void, Never>?
+    private var cleanupWatchdog: Task<Void, Never>?
+    private var stoppingScanID: UUID?
 
     init(driver: NFCReaderDriving, timeouts: Timeouts = Timeouts()) {
         self.driver = driver
@@ -52,11 +59,12 @@ final class NFCScanner: ObservableObject {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "test"
         return (["NFCCard \(version)", "OS: \(ProcessInfo.processInfo.operatingSystemVersionString)",
                  "Status: \(statusMessage)", "Core NFC available: \(readingAvailable.map { $0 ? "Yes" : "No" } ?? "Not checked")",
+                 "Reader cleanup: \(isRecovering ? "Waiting" : requiresRelaunch ? "Unconfirmed; relaunch required" : "Complete")",
                  "Error: \(errorDetails ?? "None")", ""] + log).joined(separator: "\n")
     }
 
     private func beginScan(profile: NFCScanProfile) {
-        guard activeScanID == nil else { return }
+        guard canStartScan else { return }
         let id = UUID()
         activeScanID = id
         errorMessage = nil
@@ -86,6 +94,8 @@ final class NFCScanner: ObservableObject {
     private func receive(_ event: NFCReaderEvent, id: UUID) {
         guard activeScanID == id else { return }
         switch event {
+        case .diagnostic(let line):
+            appendLog(line)
         case .availability(let available):
             readingAvailable = available
         case .active:
@@ -127,7 +137,7 @@ final class NFCScanner: ObservableObject {
         guard activeScanID == id else { return }
         if activation {
             finish(id: id, status: "Reader activation failed",
-                   error: "The NFC reader did not respond. You can retry; if it keeps failing, share the diagnostic report.",
+                   error: "The NFC reader did not activate. No card has been read. Waiting for the previous session to close before another attempt.",
                    details: "Activation deadline expired without a Core NFC active/invalidated callback.",
                    invalidateMessage: "Could not start the NFC reader.")
         } else {
@@ -140,8 +150,8 @@ final class NFCScanner: ObservableObject {
     private func finish(id: UUID, status: String, error: String? = nil,
                         details: String? = nil, invalidateMessage: String? = nil) {
         guard activeScanID == id else { return }
-        // Clear ownership BEFORE requesting invalidation. The daemon may never
-        // acknowledge it; neither the UI nor a later scan depends on that reply.
+        // Release the interface immediately, but do not start a second hardware
+        // session until the previous session has acknowledged invalidation.
         activeScanID = nil
         activationWatchdog?.cancel()
         activationWatchdog = nil
@@ -153,7 +163,32 @@ final class NFCScanner: ObservableObject {
         errorMessage = error
         if let details { errorDetails = details }
         appendLog(details.map { "\(status): \($0)" } ?? status)
-        driver.stop(scanID: id, message: invalidateMessage)
+        stoppingScanID = id
+        isRecovering = true
+        cleanupWatchdog = Task { [weak self, timeouts] in
+            try? await Task.sleep(nanoseconds: timeouts.cleanup)
+            guard !Task.isCancelled, let self, self.stoppingScanID == id else { return }
+            self.isRecovering = false
+            self.requiresRelaunch = true
+            self.errorMessage = "The NFC service did not confirm session closure. Close NFCCard from the app switcher and reopen it before scanning again. If this repeats, share the diagnostic report."
+            self.appendLog("Cleanup deadline expired; new scans blocked to avoid overlapping NFC sessions.")
+        }
+        driver.stop(scanID: id, message: invalidateMessage) { [weak self] in
+            Task { @MainActor in
+                guard let self, self.stoppingScanID == id else { return }
+                self.cleanupWatchdog?.cancel()
+                self.cleanupWatchdog = nil
+                // A small settling interval also lets the system sheet dismiss.
+                try? await Task.sleep(nanoseconds: self.timeouts.retryDelay)
+                guard self.stoppingScanID == id else { return }
+                self.stoppingScanID = nil
+                let recoveredLate = self.requiresRelaunch
+                self.isRecovering = false
+                self.requiresRelaunch = false
+                if recoveredLate { self.errorMessage = "The NFC session has now closed. You can retry." }
+                self.appendLog("Reader cleanup confirmed; ready for another scan.")
+            }
+        }
     }
 
     private func appendLog(_ message: String) {

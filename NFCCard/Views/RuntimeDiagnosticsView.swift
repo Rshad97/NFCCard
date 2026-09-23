@@ -44,6 +44,7 @@ struct RuntimeDiagnosticsView: View {
             Section("Session") {
                 LabeledContent("Scanning", value: scanner.isScanning ? "Yes" : "No")
                 LabeledContent("Profile", value: scanner.currentScanProfile)
+                LabeledContent("Reader cleanup", value: scanner.isRecovering ? "Waiting" : scanner.requiresRelaunch ? "Reopen app" : "Complete")
                 Text(scanner.statusMessage).foregroundStyle(.secondary)
                 if let error = scanner.errorMessage {
                     Text(error).foregroundStyle(.red)
