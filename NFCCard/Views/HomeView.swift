@@ -12,7 +12,7 @@ struct HomeView: View {
                     } label: {
                         Label(scanner.isScanning ? "Scanning…" : "Analyze NFC Card", systemImage: "wave.3.right.circle.fill")
                     }
-                    .disabled(scanner.isScanning)
+                    .disabled(!scanner.canStartScan)
                     .accessibilityIdentifier("scan.standard")
 
                     Button {
@@ -20,13 +20,22 @@ struct HomeView: View {
                     } label: {
                         Label("Analyze FeliCa / NFC-F", systemImage: "radiowaves.left.and.right")
                     }
-                    .disabled(scanner.isScanning)
+                    .disabled(!scanner.canStartScan)
                     .accessibilityIdentifier("scan.felica")
 
                     if scanner.isScanning {
                         Button("Cancel Scan", role: .destructive) {
                             scanner.cancelScan()
                         }
+                    }
+
+                    if scanner.isRecovering {
+                        Label("Closing the previous NFC session…", systemImage: "hourglass")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    if scanner.requiresRelaunch {
+                        Text("Close NFCCard from the app switcher and reopen it to recover the NFC reader.")
+                            .font(.caption).foregroundStyle(.orange)
                     }
 
                     HStack(alignment: .firstTextBaseline) {
