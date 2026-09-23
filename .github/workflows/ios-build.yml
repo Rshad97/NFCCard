@@ -2,6 +2,8 @@ name: Build NFCCard DEB
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [ main ]
   push:
     branches: [ main ]
 
@@ -60,6 +62,9 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :com.apple.developer.nfc.readersession.felica.systemcodes' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :UIRequiredDeviceCapabilities' "$APP/Info.plist"
           test -f "$APP/Assets.car"
+          test -f design/AppIconSource.svg
+          sips -s format jpeg design/AppIconSource.png --out "$RUNNER_TEMP/nfccard-icon-verified.jpg" >/dev/null
+          test -s "$RUNNER_TEMP/nfccard-icon-verified.jpg"
           plutil -p "$APP/Info.plist"
 
       - name: Sign jailbreak app entitlements
@@ -131,6 +136,7 @@ jobs:
           path: packages/*.deb
 
       - name: Publish standalone Sileo repo
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
