@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.2
+
+- Ignore callbacks from expired NFC sessions and prevent duplicate tag connections or completion after cancellation.
+- Limit the diagnostic log to 300 entries to avoid unbounded memory growth.
+- Replace the damaged app icon with a valid black/blue 1024×1024 PNG and editable SVG source.
+- Decode and validate the icon during CI; build pull requests without publishing packages.
+
 ## 0.3.1
 
 ### Reader-session compatibility

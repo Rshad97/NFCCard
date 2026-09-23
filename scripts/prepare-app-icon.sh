@@ -14,7 +14,11 @@ fi
 test -f "$SOURCE"
 mkdir -p "$DEST_DIR"
 
-sips -z 1024 1024 "$SOURCE" --out "$DEST" >/dev/null
+# Decode the committed source instead of resizing it. This catches corrupt PNG
+# data that a metadata-only width/height check can miss.
+sips -s format jpeg "$SOURCE" --out "${TMPDIR:-/tmp}/nfccard-icon-check-$$.jpg" >/dev/null
+rm -f "${TMPDIR:-/tmp}/nfccard-icon-check-$$.jpg"
+cp "$SOURCE" "$DEST"
 
 WIDTH=$(sips -g pixelWidth "$DEST" | awk '/pixelWidth/{print $2}')
 HEIGHT=$(sips -g pixelHeight "$DEST" | awk '/pixelHeight/{print $2}')

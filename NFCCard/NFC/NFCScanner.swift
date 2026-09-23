@@ -47,6 +47,8 @@ final class NFCScanner: NSObject, ObservableObject {
     private var activationWatchdog: Task<Void, Never>?
     private var sessionWatchdog: Task<Void, Never>?
     private var didCompleteCurrentScan = false
+    private var isCanceling = false
+    private var isConnecting = false
 
     func startScan() {
         beginScan(profile: .standard)
@@ -58,6 +60,8 @@ final class NFCScanner: NSObject, ObservableObject {
 
     func cancelScan() {
         guard let session else { return }
+        guard !isCanceling else { return }
+        isCanceling = true
         appendLog("User requested scan cancellation")
         statusMessage = "Canceling…"
         session.invalidate()
@@ -82,6 +86,8 @@ final class NFCScanner: NSObject, ObservableObject {
 
         errorMessage = nil
         didCompleteCurrentScan = false
+        isCanceling = false
+        isConnecting = false
         currentScanProfile = profile.title
         statusMessage = "Starting " + profile.title + " reader…"
 
@@ -114,6 +120,9 @@ final class NFCScanner: NSObject, ObservableObject {
 
     private func appendLog(_ message: String) {
         log.append(ISO8601DateFormatter().string(from: .now) + "  " + message)
+        if log.count > 300 {
+            log.removeFirst(log.count - 300)
+        }
     }
 
     private func scheduleActivationWatchdog() {
@@ -136,18 +145,20 @@ final class NFCScanner: NSObject, ObservableObject {
 
     private func activationTimedOut() {
         guard isScanning else { return }
+        isCanceling = true
         appendLog("Reader session did not become active within 8 seconds")
         errorMessage = "The NFC reader did not become active. Open Runtime Diagnostics to verify Core NFC availability and the packaged TAG entitlement."
         statusMessage = "Reader activation failed"
-        session?.invalidate()
+        session?.invalidate(errorMessage: "Could not start the NFC reader. Please try again.")
     }
 
     private func sessionTimedOut() {
         guard isScanning else { return }
+        isCanceling = true
         appendLog("Reader session watchdog reached 55 seconds")
         errorMessage = "The NFC session timed out. Try again and keep one card near the top of the iPhone."
         statusMessage = "Session timed out"
-        session?.invalidate()
+        session?.invalidate(errorMessage: "The NFC scan timed out. Please try again.")
     }
 
     private func resetSessionState(releaseSession: Bool = true) {
@@ -156,6 +167,8 @@ final class NFCScanner: NSObject, ObservableObject {
         sessionWatchdog?.cancel()
         sessionWatchdog = nil
         isScanning = false
+        isCanceling = false
+        isConnecting = false
         if releaseSession {
             session = nil
             currentScanProfile = "Idle"
@@ -212,6 +225,8 @@ final class NFCScanner: NSObject, ObservableObject {
     }
 
     private func finalize(_ card: NFCCardProfile, session: NFCTagReaderSession) {
+        // A timed-out NDEF callback may arrive after cancellation or a new scan.
+        guard self.session === session, isScanning, !isCanceling, !didCompleteCurrentScan else { return }
         var enriched = card
         enriched.matchedModules = CardModuleRegistry.matches(for: enriched)
         enriched.capabilities = CapabilityMapService.capabilities(for: enriched)
@@ -254,6 +269,7 @@ final class NFCScanner: NSObject, ObservableObject {
 extension NFCScanner: NFCTagReaderSessionDelegate {
     nonisolated func tagReaderSessionDidBecomeActive(_ session: NFCTagReaderSession) {
         Task { @MainActor in
+            guard self.session === session, self.isScanning, !self.isCanceling else { return }
             self.activationWatchdog?.cancel()
             self.activationWatchdog = nil
             self.statusMessage = "Ready for card"
@@ -264,6 +280,7 @@ extension NFCScanner: NFCTagReaderSessionDelegate {
 
     nonisolated func tagReaderSession(_ session: NFCTagReaderSession, didInvalidateWithError error: Error) {
         Task { @MainActor in
+            guard self.session === session else { return }
             let completed = self.didCompleteCurrentScan
             self.resetSessionState()
 
@@ -302,25 +319,29 @@ extension NFCScanner: NFCTagReaderSessionDelegate {
         }
 
         Task { @MainActor in
+            guard self.session === session, self.isScanning, !self.isCanceling, !self.isConnecting else { return }
+            self.isConnecting = true
             self.statusMessage = "Card detected — connecting…"
             self.appendLog("Tag detected")
-        }
 
-        session.connect(to: tag) { error in
-            if let error {
-                session.invalidate(errorMessage: error.localizedDescription)
-                return
-            }
+            session.connect(to: tag) { error in
+                if let error {
+                    session.invalidate(errorMessage: error.localizedDescription)
+                    return
+                }
 
-            Task { @MainActor in
-                self.statusMessage = "Reading public metadata…"
-                self.appendLog("Connected to tag; collecting public protocol metadata")
-                var card = self.baseProfile(for: tag)
+                Task { @MainActor in
+                    guard self.session === session, self.isScanning, !self.isCanceling else { return }
+                    self.statusMessage = "Reading public metadata…"
+                    self.appendLog("Connected to tag; collecting public protocol metadata")
+                    let card = self.baseProfile(for: tag)
 
-                NDEFInspector.inspect(tag: tag) { metadata in
-                    Task { @MainActor in
-                        card.ndef = metadata
-                        self.finalize(card, session: session)
+                    NDEFInspector.inspect(tag: tag) { metadata in
+                        Task { @MainActor in
+                            var result = card
+                            result.ndef = metadata
+                            self.finalize(result, session: session)
+                        }
                     }
                 }
             }

@@ -4,9 +4,9 @@ NFCCard is an open-source iPhone NFC research and interoperability toolkit. It i
 
 The project is protocol-first and vendor-neutral. It contains no dependency on a specific access-control deployment, issuer, reader vendor, or private infrastructure.
 
-## Current release — 0.3.1
+## Current release — 0.3.2
 
-NFCCard 0.3.1 focuses on reader-session compatibility, diagnostics, and the stable **Protocol Atlas** release.
+NFCCard 0.3.2 fixes stale NFC session callbacks and replaces the invalid icon source with a decodable black/blue design.
 
 Implemented:
 
@@ -93,7 +93,7 @@ xcodegen generate
 open NFCCard.xcodeproj
 ```
 
-The icon preparation step converts the committed black/blue source icon into the 1024×1024 AppIcon used by the asset catalog.
+The icon preparation step validates and copies the committed 1024×1024 black/blue PNG into the asset catalog. Its editable vector design is `design/AppIconSource.svg`.
 
 A physical NFC-capable iPhone is required for real tag scanning.
 
@@ -116,6 +116,7 @@ Package ID: `com.rashad.nfccard`.
 - `docs/APPLE_WALLET.md`
 - `docs/SECURITY.md`
 - `docs/AUDIT_0.3.0.md`
+- `docs/AUDIT_0.3.2.md`
 - `docs/ROADMAP.md`
 
 ## License
