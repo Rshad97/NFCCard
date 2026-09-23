@@ -23,6 +23,8 @@ The coordinator released its busy flag before receiving an invalidation callback
 
 The validator rejects the actual published 0.3.3 payload for its identity mismatch. This is useful regression evidence, not proof that identity mismatch alone caused the reported NFC failure.
 
+The new dynamic SecTask bridge is also executed on macOS against two real signed helper binaries: one with TAG and one without it. This checks the C ABI/ownership and positive/negative runtime entitlement results, beyond merely compiling it in the simulator. macOS success does not prove that iOS exposes the same entitlement values.
+
 ## Device acceptance still required
 
 After the Sileo update and Restart SpringBoard, open NFCCard, start one scan and check that the system sheet appears and the log contains `Reader session active`. Then test a known compatible tag and the user's card separately. Cancel and rescan after cleanup. If activation fails again, share the 0.3.4 report: its runtime entitlement values, last startup checkpoint and underlying errors are necessary to distinguish signature rejection from a device NFC service problem. No physical jailbroken iPhone is attached to CI, so successful card reading is not claimed by this audit.
