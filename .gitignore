@@ -8,3 +8,7 @@ xcuserdata/
 *.xcuserstate
 NFCCard.xcodeproj/
 NFCCard/Assets.xcassets/AppIcon.appiconset/AppIcon.png
+
+.build/
+build-simulator/
+test-results/

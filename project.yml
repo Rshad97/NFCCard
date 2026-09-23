@@ -17,3 +17,24 @@ targets:
         INFOPLIST_FILE: NFCCard/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: "1"
+
+  NFCCardUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - Tests/NFCCardUITests
+    dependencies:
+      - target: NFCCard
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.rashad.nfccard.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: NFCCard
+schemes:
+  NFCCard:
+    build:
+      targets:
+        NFCCard: all
+    test:
+      targets:
+        - NFCCardUITests

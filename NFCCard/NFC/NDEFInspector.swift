@@ -1,90 +1,82 @@
 import Foundation
 import CoreNFC
 
-enum NDEFInspector {
-    private static let operationTimeout: TimeInterval = 4
+/// Query, timeout, cancellation and result handling share the reader queue.
+/// A late query response cannot initiate readNDEF after the scan has ended.
+final class NDEFInspection {
+    private(set) var isFinished = false
+    private var completion: ((NDEFMetadata) -> Void)?
+    private var timeout: DispatchWorkItem?
 
-    static func inspect(tag: NFCTag, completion: @escaping (NDEFMetadata) -> Void) {
-        switch tag {
-        case .miFare(let value): inspectNDEFTag(value, completion: completion)
-        case .iso7816(let value): inspectNDEFTag(value, completion: completion)
-        case .iso15693(let value): inspectNDEFTag(value, completion: completion)
-        case .feliCa(let value): inspectNDEFTag(value, completion: completion)
-        @unknown default:
-            completion(NDEFMetadata(access: .unknown, capacity: 0, records: []))
-        }
+    init(queue: DispatchQueue, completion: @escaping (NDEFMetadata) -> Void) {
+        self.completion = completion
+        let work = DispatchWorkItem { [weak self] in self?.finish(NDEFMetadata()) }
+        timeout = work
+        queue.asyncAfter(deadline: .now() + 4, execute: work)
     }
 
-    private static func inspectNDEFTag(_ tag: any NFCNDEFTag, completion: @escaping (NDEFMetadata) -> Void) {
-        let finish = OneShot(completion)
+    func cancel() {
+        isFinished = true
+        completion = nil
+        timeout?.cancel()
+        timeout = nil
+    }
 
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + operationTimeout) {
-            finish.call(NDEFMetadata(access: .unknown, capacity: 0, records: []))
-        }
-
-        tag.queryNDEFStatus { status, capacity, error in
-            guard error == nil else {
-                finish.call(NDEFMetadata(access: .unknown, capacity: 0, records: []))
-                return
-            }
-
-            let access: NDEFMetadata.Access
-            switch status {
-            case .notSupported: access = .unsupported
-            case .readOnly: access = .readOnly
-            case .readWrite: access = .readWrite
-            @unknown default: access = .unknown
-            }
-
-            guard status != .notSupported else {
-                finish.call(NDEFMetadata(access: access, capacity: capacity, records: []))
-                return
-            }
-
-            tag.readNDEF { message, error in
-                guard error == nil else {
-                    finish.call(NDEFMetadata(access: access, capacity: capacity, records: []))
-                    return
-                }
-
-                let records: [NDEFRecordSummary]
-                if let message {
-                    records = message.records.map { record -> NDEFRecordSummary in
-                        let type = String(data: record.type, encoding: .utf8) ?? record.type.hexString
-                        let previewData = record.payload.prefix(64)
-                        let preview = String(data: previewData, encoding: .utf8) ?? Data(previewData).hexString
-
-                        return NDEFRecordSummary(
-                            typeNameFormat: String(describing: record.typeNameFormat),
-                            type: type,
-                            identifierHex: record.identifier.hexString,
-                            payloadPreview: preview,
-                            payloadLength: record.payload.count
-                        )
-                    }
-                } else {
-                    records = []
-                }
-
-                finish.call(NDEFMetadata(access: access, capacity: capacity, records: records))
-            }
-        }
+    func finish(_ metadata: NDEFMetadata) {
+        guard !isFinished else { return }
+        let callback = completion
+        cancel()
+        callback?(metadata)
     }
 }
 
-private final class OneShot<Value>: @unchecked Sendable {
-    private let lock = NSLock()
-    private var completion: ((Value) -> Void)?
-
-    init(_ completion: @escaping (Value) -> Void) {
-        self.completion = completion
+enum NDEFInspector {
+    static func inspect(tag: NFCTag, queue: DispatchQueue,
+                        completion: @escaping (NDEFMetadata) -> Void) -> NDEFInspection {
+        let operation = NDEFInspection(queue: queue, completion: completion)
+        switch tag {
+        case .miFare(let value): inspect(value, queue: queue, operation: operation)
+        case .iso7816(let value): inspect(value, queue: queue, operation: operation)
+        case .iso15693(let value): inspect(value, queue: queue, operation: operation)
+        case .feliCa(let value): inspect(value, queue: queue, operation: operation)
+        @unknown default: operation.finish(NDEFMetadata())
+        }
+        return operation
     }
 
-    func call(_ value: Value) {
-        lock.lock()
-        let callback = completion
-        completion = nil
-        lock.unlock()
-        callback?(value)
+    private static func inspect(_ tag: any NFCNDEFTag, queue: DispatchQueue, operation: NDEFInspection) {
+        tag.queryNDEFStatus { status, capacity, error in
+            queue.async {
+                guard !operation.isFinished else { return }
+                guard error == nil else { operation.finish(NDEFMetadata()); return }
+                let access: NDEFMetadata.Access
+                switch status {
+                case .notSupported: access = .unsupported
+                case .readOnly: access = .readOnly
+                case .readWrite: access = .readWrite
+                @unknown default: access = .unknown
+                }
+                let metadata = NDEFMetadata(access: access, capacity: max(0, capacity), records: [])
+                guard status == .readOnly || status == .readWrite else { operation.finish(metadata); return }
+                tag.readNDEF { message, error in
+                    queue.async {
+                        guard !operation.isFinished else { return }
+                        var result = metadata
+                        if error == nil, let message {
+                            result.records = message.records.map { record in
+                                let preview = Data(record.payload.prefix(64))
+                                return NDEFRecordSummary(
+                                    typeNameFormat: String(describing: record.typeNameFormat),
+                                    type: String(data: record.type, encoding: .utf8) ?? record.type.hexString,
+                                    identifierHex: record.identifier.hexString,
+                                    payloadPreview: String(data: preview, encoding: .utf8) ?? preview.hexString,
+                                    payloadLength: record.payload.count)
+                            }
+                        }
+                        operation.finish(result)
+                    }
+                }
+            }
+        }
     }
 }

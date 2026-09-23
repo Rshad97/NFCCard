@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+case "${1:-}" in
+    remove|upgrade|deconfigure)
+        if command -v killall >/dev/null 2>&1; then
+            killall -TERM NFCCard >/dev/null 2>&1 || true
+        fi
+        ;;
+esac
+case "${1:-}" in
+    remove|deconfigure)
+        if command -v uicache >/dev/null 2>&1; then
+            uicache -u /var/jb/Applications/NFCCard.app || true
+        fi
+        ;;
+esac
+exit 0
