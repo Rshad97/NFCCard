@@ -23,7 +23,7 @@ The coordinator released its busy flag before receiving an invalidation callback
 
 The validator rejects the actual published 0.3.3 payload for its identity mismatch. This is useful regression evidence, not proof that identity mismatch alone caused the reported NFC failure.
 
-The new dynamic SecTask bridge is also executed on macOS against two real signed helper binaries: one with TAG and one without it. This checks the C ABI/ownership and positive/negative runtime entitlement results, beyond merely compiling it in the simulator. macOS success does not prove that iOS exposes the same entitlement values.
+The new dynamic SecTask bridge is also executed on macOS against real signed helper binaries. A positive case reads an unrestricted `com.rashad.nfccard.test.reader-formats` entitlement containing TAG; a negative case queries the absent production NFC entitlement. The initial attempt to launch a macOS helper carrying the restricted iPhone NFC entitlement was killed by macOS before the test ran, so it is not an appropriate host test. The revised cases check the C ABI/ownership and positive/negative entitlement extraction beyond merely compiling it. They do not prove that iOS grants the production TAG entitlement.
 
 ## Device acceptance still required
 
