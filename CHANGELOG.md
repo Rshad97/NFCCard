@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.3
+
+- Release UI state on cancel, timeout, backgrounding and errors without waiting for a Core NFC invalidation callback.
+- Run availability checks, session construction, begin/invalidate, tag connection and NDEF operations on a serial worker queue.
+- Cancel NDEF operations and ignore late results before they can start another read.
+- Present errors inline and add shareable diagnostics with exact error domain/code and version.
+- Request Sileo's Restart SpringBoard finish action, terminate the old app on update/removal and unregister the bundle by path.
+- Add coordinator regression tests, maintainer-script tests and an iPhone simulator UI test as release gates.
+- Preserve the approved 0.3.2 icon byte-for-byte.
+
 ## 0.3.2
 
 - Ignore callbacks from expired NFC sessions and prevent duplicate tag connections or completion after cancellation.

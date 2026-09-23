@@ -4,9 +4,9 @@ NFCCard is an open-source iPhone NFC research and interoperability toolkit. It i
 
 The project is protocol-first and vendor-neutral. It contains no dependency on a specific access-control deployment, issuer, reader vendor, or private infrastructure.
 
-## Current release — 0.3.2
+## Current release — 0.3.3
 
-NFCCard 0.3.2 fixes stale NFC session callbacks and replaces the invalid icon source with a decodable black/blue design.
+NFCCard 0.3.3 fixes scan recovery when Core NFC never replies, moves all NFC calls off the UI executor, and requests Restart SpringBoard through Sileo after installation. The 0.3.2 icon is unchanged.
 
 Implemented:
 
@@ -34,6 +34,16 @@ Implemented:
 The standard reader now polls ISO 14443 + ISO 15693, while FeliCa/NFC-F runs in a separate ISO 18092 session. This isolates NFC-F system-code/configuration failures from the main MIFARE/DESFire/NTAG/ISO15693 path. The reader lifecycle is also guarded by activation and session watchdogs, and NDEF inspection has its own timeout.
 
 Runtime Diagnostics shows whether Core NFC is available and whether the bundle contains the required usage description and configured discovery identifiers.
+
+## Recovery and diagnostics
+
+A failed, canceled or timed-out scan releases the UI immediately, even if Core NFC never acknowledges invalidation. Backgrounding the app also ends its current scan. NFC framework calls run on a serial worker queue. Errors appear inline so an app alert cannot compete with the system NFC sheet. **Share Diagnostic Report** includes the app version, system version, NFC error domain/code and bounded session log.
+
+Sileo installation terminates the old NFCCard process, refreshes its icon registration and requests **Restart SpringBoard** using Sileo's finish-action pipe. Tap that button once installation is complete. A respring does not prove NFC permissions or hardware are working.
+
+## Tests
+
+On macOS, `swift test` runs the production scan coordinator against injected reader failures, missing callbacks and a blocked worker. `python3 scripts/test-package-scripts.py` runs the actual maintainer scripts against mocked commands and a real pipe. CI also launches the iPhone simulator, retries the unavailable-NFC path and verifies navigation remains responsive before building/signing the device DEB. The simulator cannot read physical cards or validate a jailbroken device's NFC daemon permissions.
 
 ## Card Genome
 
@@ -117,6 +127,7 @@ Package ID: `com.rashad.nfccard`.
 - `docs/SECURITY.md`
 - `docs/AUDIT_0.3.0.md`
 - `docs/AUDIT_0.3.2.md`
+- `docs/AUDIT_0.3.3.md`
 - `docs/ROADMAP.md`
 
 ## License

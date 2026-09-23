@@ -1,5 +1,4 @@
 import SwiftUI
-import CoreNFC
 
 struct RuntimeDiagnosticsView: View {
     @EnvironmentObject private var scanner: NFCScanner
@@ -20,7 +19,8 @@ struct RuntimeDiagnosticsView: View {
     var body: some View {
         List {
             Section("Device") {
-                LabeledContent("Core NFC available", value: NFCReaderSession.readingAvailable ? "Yes" : "No")
+                LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown")
+                LabeledContent("Core NFC available", value: scanner.readingAvailable.map { $0 ? "Yes" : "No" } ?? "Run a scan to check")
             }
 
             Section("Bundle Configuration") {
@@ -47,6 +47,12 @@ struct RuntimeDiagnosticsView: View {
                 Text(scanner.statusMessage).foregroundStyle(.secondary)
                 if let error = scanner.errorMessage {
                     Text(error).foregroundStyle(.red)
+                }
+                if let details = scanner.errorDetails {
+                    Text(details).font(.caption.monospaced()).textSelection(.enabled)
+                }
+                ShareLink(item: scanner.diagnosticReport) {
+                    Label("Share Diagnostic Report", systemImage: "square.and.arrow.up")
                 }
             }
 

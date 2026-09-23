@@ -1,0 +1,26 @@
+#!/bin/sh
+set -eu
+case "${1:-}" in configure) ;; *) exit 0 ;; esac
+
+# Stop the previous process so an upgrade cannot keep running the old binary.
+if command -v killall >/dev/null 2>&1; then
+    killall -TERM NFCCard >/dev/null 2>&1 || true
+fi
+if command -v uicache >/dev/null 2>&1; then
+    uicache -p /var/jb/Applications/NFCCard.app || true
+fi
+
+# Sileo supplies its finish-action pipe in SILEO/CYDIA (first integer is the fd).
+# Ask Sileo to offer Restart SpringBoard after dpkg has completed. Never kill
+# SpringBoard from a maintainer script while installation is still in progress.
+nfccard_finish_fd=${SILEO:-${CYDIA:-}}
+nfccard_finish_fd=${nfccard_finish_fd%% *}
+case "$nfccard_finish_fd" in
+    ''|*[!0-9]*) ;;
+    *)
+        if [ "$nfccard_finish_fd" -ge 3 ] && [ -e "/dev/fd/$nfccard_finish_fd" ]; then
+            printf 'finish:restart\n' > "/dev/fd/$nfccard_finish_fd" || true
+        fi
+        ;;
+esac
+exit 0
