@@ -3,6 +3,7 @@
 ## 0.3.4
 
 - Match the jailbreak executable's CodeDirectory signing identifier to its bundle identifier; the published 0.3.3 binary used `NFCCard` instead of `com.rashad.nfccard`.
+- Ad-hoc sign the complete application bundle with native codesign, including the Info.plist/resource seal and DER entitlements; validate the full seal before and after DEB extraction.
 - Use a dedicated jailbreak signing profile with TAG and platform-application entitlements; retain the standard profile for ordinary Xcode builds.
 - Give Core NFC its own delegate queue, separate from the app's serial command worker.
 - Wait for confirmed session invalidation and a short settling interval before enabling another scan. If closure never arrives, keep navigation responsive and request an app relaunch instead of queuing more sessions.

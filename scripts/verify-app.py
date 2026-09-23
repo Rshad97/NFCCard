@@ -62,6 +62,8 @@ def verify(app, expected_entitlements, source_info):
             raise ValueError(f'Packaged metadata does not match source: {key}')
     if not (app / 'Assets.car').is_file():
         raise ValueError('Compiled icon asset catalog missing')
+    if not (app / '_CodeSignature' / 'CodeResources').is_file():
+        raise ValueError('Application resource signature missing')
     print(f'Verified NFCCard {info["CFBundleShortVersionString"]}: signing identity={bundle_id}, TAG, jailbreak platform entitlement, metadata and assets')
 
 

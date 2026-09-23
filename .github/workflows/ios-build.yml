@@ -99,11 +99,12 @@ jobs:
         run: |
           set -euo pipefail
           APP="$PWD/build/Build/Products/Release-iphoneos/NFCCard.app"
-          ldid -Icom.rashad.nfccard -Spackaging/NFCCard-jailbreak.entitlements "$APP/NFCCard"
+          codesign --force --sign - --identifier com.rashad.nfccard \
+            --generate-entitlement-der --entitlements packaging/NFCCard-jailbreak.entitlements "$APP"
           ldid -e "$APP/NFCCard" > "$RUNNER_TEMP/NFCCard.entitlements.plist"
           cat "$RUNNER_TEMP/NFCCard.entitlements.plist"
           python3 scripts/verify-app.py "$APP" packaging/NFCCard-jailbreak.entitlements NFCCard/Info.plist
-          codesign --verify --verbose "$APP/NFCCard"
+          codesign --verify --strict --verbose "$APP"
 
       - name: Build rootless DEB
         shell: bash
@@ -143,6 +144,7 @@ jobs:
           cmp packaging/prerm "$RUNNER_TEMP/nfccard-control-check/prerm"
           dpkg-deb -x "$OUT/com.rashad.nfccard_${VERSION}_iphoneos-arm64.deb" "$RUNNER_TEMP/nfccard-payload-check"
           python3 scripts/verify-app.py "$RUNNER_TEMP/nfccard-payload-check/var/jb/Applications/NFCCard.app" packaging/NFCCard-jailbreak.entitlements NFCCard/Info.plist
+          codesign --verify --strict --verbose "$RUNNER_TEMP/nfccard-payload-check/var/jb/Applications/NFCCard.app"
           cmp "$APP/NFCCard" "$RUNNER_TEMP/nfccard-payload-check/var/jb/Applications/NFCCard.app/NFCCard"
           dpkg-deb -I "$OUT/com.rashad.nfccard_${VERSION}_iphoneos-arm64.deb"
           dpkg-deb -c "$OUT/com.rashad.nfccard_${VERSION}_iphoneos-arm64.deb"
