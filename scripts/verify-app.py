@@ -51,10 +51,12 @@ def verify(app, expected_entitlements, source_info):
         raise ValueError(f'Signing identity {identities} does not match bundle {bundle_id}')
     if entitlements != expected:
         raise ValueError(f'Unexpected signed entitlements: {entitlements}')
-    if entitlements.get('com.apple.developer.nfc.readersession.formats') != ['TAG']:
-        raise ValueError('NFC TAG permission missing')
+    if entitlements.get('com.apple.developer.nfc.readersession.formats') != ['NDEF', 'TAG']:
+        raise ValueError('NFC NDEF + TAG permissions missing')
     if entitlements.get('platform-application') is not True:
         raise ValueError('Jailbreak platform-application entitlement missing')
+    if entitlements.get('com.apple.private.skip-library-validation') is not True:
+        raise ValueError('Jailbreak skip-library-validation entitlement missing')
     for key in ('CFBundleShortVersionString', 'CFBundleVersion', 'NFCReaderUsageDescription',
                 'com.apple.developer.nfc.readersession.iso7816.select-identifiers',
                 'com.apple.developer.nfc.readersession.felica.systemcodes'):
@@ -64,7 +66,7 @@ def verify(app, expected_entitlements, source_info):
         raise ValueError('Compiled icon asset catalog missing')
     if not (app / '_CodeSignature' / 'CodeResources').is_file():
         raise ValueError('Application resource signature missing')
-    print(f'Verified NFCCard {info["CFBundleShortVersionString"]}: signing identity={bundle_id}, TAG, jailbreak platform entitlement, metadata and assets')
+    print(f'Verified NFCCard {info["CFBundleShortVersionString"]}: signing identity={bundle_id}, NDEF+TAG, jailbreak platform entitlements, metadata and assets')
 
 
 if __name__ == '__main__':
