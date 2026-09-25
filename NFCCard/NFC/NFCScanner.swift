@@ -168,10 +168,11 @@ final class NFCScanner: ObservableObject {
         cleanupWatchdog = Task { [weak self, timeouts] in
             try? await Task.sleep(nanoseconds: timeouts.cleanup)
             guard !Task.isCancelled, let self, self.stoppingScanID == id else { return }
+            self.driver.reset(scanID: id)
             self.isRecovering = false
-            self.requiresRelaunch = true
-            self.errorMessage = "The NFC service did not confirm session closure. Close NFCCard from the app switcher and reopen it before scanning again. If this repeats, share the diagnostic report."
-            self.appendLog("Cleanup deadline expired; new scans blocked to avoid overlapping NFC sessions.")
+            self.requiresRelaunch = false
+            self.errorMessage = "The previous NFC session did not close normally. The stale session was released; you can retry now."
+            self.appendLog("Cleanup deadline expired; stale reader released in-app and retry enabled.")
         }
         driver.stop(scanID: id, message: invalidateMessage) { [weak self] in
             Task { @MainActor in

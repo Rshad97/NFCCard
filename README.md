@@ -4,11 +4,13 @@ NFCCard is an open-source iPhone NFC research and interoperability toolkit. It i
 
 The project is protocol-first and vendor-neutral. It contains no dependency on a specific access-control deployment, issuer, reader vendor, or private infrastructure.
 
-## Current release — 0.3.5
+## Current release — 0.3.6
 
 NFCCard 0.3.4 addresses reader activation failures with consistent signing identity, a dedicated jailbreak signing profile, separate Core NFC callback/command queues, and confirmed cleanup before retries. Runtime diagnostics now include the installed process's NFC entitlement and the last completed startup stage. The approved icon and Sileo Restart SpringBoard action are unchanged.
 
 NFCCard 0.3.5 adds the NDEF reader format and the jailbreak-only Core NFC framework compatibility entitlement. This targets iOS 17.5.1 sessions that were invalidated with error 202 before `didBecomeActive`; it does not alter normal Xcode signing or the approved icon.
+
+NFCCard 0.3.6 releases a stale reader object in-app after a missing cleanup acknowledgment, so retrying does not require closing the app from the app switcher.
 
 After updating, use Sileo's **Restart SpringBoard**, open NFCCard and scan once. If the NFC service never confirms closure, the app asks you to close it from the app switcher and reopen it; repeated taps cannot enqueue more stuck sessions. Share the new diagnostic report if activation still fails. Physical NFC reading on the target jailbreak still requires a device check; automated tests cannot prove that the system grants reader access.
 
