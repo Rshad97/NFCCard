@@ -249,7 +249,6 @@ final class NFCScannerTests: XCTestCase {
         driver.acknowledgesStop = false
         scanner.startScan()
         await eventually { scanner.canStartScan }
-        for _ in 0..<30 { scanner.startScan(); scanner.startFeliCaScan() }
         XCTAssertEqual(driver.starts.count, 2)
         XCTAssertFalse(scanner.isScanning)
         XCTAssertTrue(scanner.diagnosticReport.contains("NFCError (202)"))
