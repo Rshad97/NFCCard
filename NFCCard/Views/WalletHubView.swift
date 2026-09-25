@@ -2,19 +2,30 @@ import SwiftUI
 
 struct WalletHubView: View {
     @EnvironmentObject private var scanner: NFCScanner
+    @EnvironmentObject private var library: CardLibraryStore
 
     var body: some View {
         NavigationStack {
-            Group {
-                if let card = scanner.lastCard {
-                    WalletCompatibilityView(card: card)
-                } else {
-                    VStack(spacing: 10) {
-                        Image(systemName: "wallet.pass").font(.largeTitle).foregroundStyle(.secondary)
-                        Text("Analyze a Card First").font(.headline)
-                        Text("NFCCard will map the legitimate Apple contactless paths available for the card or use case.").font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            List {
+                Section("Card display passes") {
+                    if library.cards.isEmpty, scanner.lastCard == nil {
+                        Text("Scan a card first to prepare its display pass. You can import an existing signed pass below without scanning.")
                     }
-                    .padding()
+                    ForEach(library.cards.isEmpty ? [scanner.lastCard].compactMap { $0 } : library.cards) { card in
+                        NavigationLink {
+                            WalletCardView(card: card)
+                        } label: {
+                            Label(card.name == "Unknown Card" ? card.technology : card.name, systemImage: "wallet.pass")
+                        }
+                    }
+                }
+                Section("Apple Wallet") { WalletPassImportView() }
+                Section("Contactless status") {
+                    Text(WalletPassSource.limitation)
+                        .accessibilityIdentifier("wallet.access-limitation")
+                    if let card = scanner.lastCard ?? library.cards.first {
+                        NavigationLink("Contactless Route Details") { WalletCompatibilityView(card: card) }
+                    }
                 }
             }
             .navigationTitle("Wallet")

@@ -4,7 +4,15 @@ NFCCard is an open-source iPhone NFC research and interoperability toolkit. It i
 
 The project is protocol-first and vendor-neutral. It contains no dependency on a specific access-control deployment, issuer, reader vendor, or private infrastructure.
 
-## Current release — 0.3.6
+## Wallet development — 0.3.7
+
+The Wallet screen now supports local display previews, unsigned pass-source export, and importing issuer-signed `.pkpass` files through Apple's confirmation sheet. An offline signing tool is included; a valid Apple Pass Type ID certificate is **not** supplied. See [Wallet setup](docs/APPLE_WALLET.md).
+
+This is **not** NFC emulation or ACID access. Scanning a card only saves its public metadata, not its cryptographic credential. Nothing is uploaded automatically.
+
+The reported 0.3.6 pre-activation failure stopped after the tester removed Aemulo. That is useful device evidence of a conflict, not proof that every error 202 has the same cause. The working NFC path, existing app icon, entitlements and shared Sileo repository are left unchanged in this Wallet update.
+
+## Previous reader releases — through 0.3.6
 
 NFCCard 0.3.4 addresses reader activation failures with consistent signing identity, a dedicated jailbreak signing profile, separate Core NFC callback/command queues, and confirmed cleanup before retries. Runtime diagnostics now include the installed process's NFC entitlement and the last completed startup stage. The approved icon and Sileo Restart SpringBoard action are unchanged.
 

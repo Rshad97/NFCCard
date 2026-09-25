@@ -1,6 +1,73 @@
 import XCTest
 
 final class NFCCardUITests: XCTestCase {
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+    }
+
+    override func tearDownWithError() throws {
+        if testRun?.hasSucceeded == false {
+            let app = XCUIApplication()
+            attachScreenshot(app, name: "Failure screenshot")
+            let hierarchy = XCTAttachment(string: app.debugDescription)
+            hierarchy.name = "Accessibility hierarchy"
+            hierarchy.lifetime = .keepAlways
+            add(hierarchy)
+        }
+    }
+
+    func testWalletImportIsAvailableWithoutAnActiveScan() {
+        let app = XCUIApplication()
+        app.launch()
+        app.tabBars.buttons["Wallet"].tap()
+        XCTAssertTrue(app.buttons["wallet.import"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["wallet.access-limitation"].exists)
+        // An Add to Wallet button must not appear before a signed pass exists.
+        XCTAssertFalse(app.buttons["wallet.add-pass"].exists)
+    }
+
+    func testSavedSnapshotHasWalletPreviewWithoutExposingUIDByDefault() {
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-wallet"]
+        app.launch()
+        app.tabBars.buttons["Library"].tap()
+        let card = app.staticTexts["Wallet Test Card"].firstMatch
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        card.tap()
+        let wallet = app.buttons["card.wallet"]
+        XCTAssertTrue(wallet.waitForExistence(timeout: 5))
+        wallet.tap()
+        XCTAssertTrue(app.staticTexts["DISPLAY ONLY"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Not an access credential"].exists)
+        XCTAssertFalse(app.staticTexts["01020304050607"].exists)
+        let toggle = app.switches["wallet.include-identifier"]
+        XCTAssertTrue(toggle.exists)
+        XCTAssertEqual(toggle.value as? String, "0")
+        XCTAssertTrue(toggle.isHittable)
+        // SwiftUI exposes the whole labelled row as a Switch. Its centre is
+        // the label, not the UISwitch. Target the trailing control in this
+        // English-language test, relative to the row rather than screen pixels.
+        toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        let enabled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == '1'"), object: toggle)
+        XCTAssertEqual(XCTWaiter.wait(for: [enabled], timeout: 5), .completed)
+        XCTAssertTrue(app.staticTexts["01020304050607"].waitForExistence(timeout: 5))
+        attachScreenshot(app, name: "Wallet preview with identifier enabled")
+
+        toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        let disabled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == '0'"), object: toggle)
+        XCTAssertEqual(XCTWaiter.wait(for: [disabled], timeout: 5), .completed)
+        let hidden = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.staticTexts["01020304050607"])
+        XCTAssertEqual(XCTWaiter.wait(for: [hidden], timeout: 5), .completed)
+        attachScreenshot(app, name: "Wallet preview with identifier hidden")
+    }
+
+    private func attachScreenshot(_ app: XCUIApplication, name: String) {
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = name
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
     func testUnavailableNFCCanBeRetriedWithoutFreezingNavigation() {
         let app = XCUIApplication()
         app.launch()

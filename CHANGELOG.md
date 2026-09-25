@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.7
+
+- Add a Wallet preparation screen to saved card snapshots and the Wallet tab, with an editable display name and an explicit display-only preview.
+- Export an unsigned JSON pass source. Public card identifiers are opt-in; protected data, Key Vault material and fingerprints are never included.
+- Import signed `.pkpass` files using bounded off-main-thread reads, PassKit validation and Apple's Add to Wallet confirmation sheet. Cancellation is not reported as successful addition.
+- Include an offline display-pass signer with certificate identity/key matching, manifest hashing, detached CMS signing and icon resizing; Apple signing credentials remain required and are never bundled in the app.
+- Add Wallet source/import, signer and simulator UI coverage. NFC reader code, signing entitlements, the approved app icon, FreeFall and repository branding are unchanged.
+- This version does **not** implement UID/DESFire emulation, ACID access or automatic issuance of an Apple-signed pass.
+
 ## 0.3.6
 
 - Release a stale Core NFC session in-app when iOS never sends the invalidation acknowledgment; a new scan is enabled without forcing the user to terminate NFCCard.

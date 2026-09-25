@@ -29,6 +29,7 @@ jobs:
         run: |
           swift test
           python3 scripts/test-package-scripts.py
+          python3 scripts/test-wallet-pass.py
           bash scripts/test-signing-diagnostics.sh
 
       - name: Prepare app icon
@@ -38,7 +39,7 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
-      - name: Test scan error recovery on iPhone simulator
+      - name: Test scan recovery and Wallet on iPhone simulator
         timeout-minutes: 12
         run: |
           set -euo pipefail
@@ -51,6 +52,21 @@ jobs:
             -derivedDataPath "$PWD/build-simulator" \
             -resultBundlePath "$PWD/test-results/Simulator.xcresult" \
             CODE_SIGNING_ALLOWED=NO
+
+      - name: Export simulator screenshots and diagnostics
+        if: ${{ always() && hashFiles('test-results/Simulator.xcresult/Info.plist') != '' }}
+        run: |
+          xcrun xcresulttool export attachments \
+            --path "$PWD/test-results/Simulator.xcresult" \
+            --output-path "$PWD/test-results/attachments"
+
+      - name: Upload simulator screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: NFCCard-UI-Attachments
+          path: test-results/attachments/
+          if-no-files-found: ignore
 
       - name: Upload simulator test results
         if: always()
