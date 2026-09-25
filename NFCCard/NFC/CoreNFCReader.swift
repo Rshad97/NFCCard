@@ -85,6 +85,16 @@ final class CoreNFCReader: NSObject, NFCReaderDriving, NFCTagReaderSessionDelega
         }
     }
 
+    func reset(scanID: UUID) {
+        queue.async {
+            guard self.scanID == scanID else { return }
+            self.inspection?.cancel()
+            self.inspection = nil
+            self.session?.invalidate()
+            self.clearOwnership()
+        }
+    }
+
     private func clearOwnership() {
         dispatchPrecondition(condition: .onQueue(queue))
         session = nil

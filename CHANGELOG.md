@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.6
+
+- Release a stale Core NFC session in-app when iOS never sends the invalidation acknowledgment; a new scan is enabled without forcing the user to terminate NFCCard.
+- Keep the diagnostic message, but report that the old reader was released and retry is available.
+
 ## 0.3.5
 
 - Add the NDEF reader format and jailbreak Core NFC framework compatibility entitlement to the rootless device signature. The 0.3.4 report showed iOS 17.5.1 invalidating every tag session before `didBecomeActive` (`NFCError 202`), so no card was ever polled.

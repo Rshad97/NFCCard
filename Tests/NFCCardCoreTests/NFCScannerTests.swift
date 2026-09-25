@@ -16,6 +16,8 @@ private final class FakeReader: NFCReaderDriving {
         completions[scanID] = completion
         if acknowledgesStop { completion() }
     }
+
+    func reset(scanID: UUID) { completions[scanID]?() }
     func emit(_ event: NFCReaderEvent, for id: UUID? = nil) {
         let target = id ?? starts.last!
         handlers[target]?(target, event)
@@ -32,7 +34,7 @@ final class NFCScannerTests: XCTestCase {
         XCTFail("Condition did not become true", file: file, line: line)
     }
 
-    func testCancelReleasesUIButCannotRetryWithoutInvalidationCallback() async {
+    func testCancelReleasesUIAndRetryDoesNotRequireAppRelaunch() async {
         let driver = FakeReader()
         driver.acknowledgesStop = false
         let subject = NFCScanner(driver: driver, timeouts: .init(cleanup: 20_000_000, retryDelay: 0))
@@ -44,10 +46,11 @@ final class NFCScannerTests: XCTestCase {
         XCTAssertFalse(subject.isScanning)
         XCTAssertEqual(driver.starts.count, 1)
         XCTAssertEqual(driver.stops.count, 1)
-        await eventually { subject.requiresRelaunch }
+        await eventually { subject.canStartScan }
         XCTAssertFalse(subject.isRecovering)
-        XCTAssertFalse(subject.canStartScan)
-        XCTAssertTrue(subject.errorMessage?.contains("Close NFCCard") == true)
+        XCTAssertTrue(subject.canStartScan)
+        subject.startScan()
+        XCTAssertEqual(driver.starts.count, 2)
     }
 
     func testActivationTimeoutReleasesUIWithoutAnyDriverCallback() async {
@@ -62,7 +65,8 @@ final class NFCScannerTests: XCTestCase {
         scanner.startScan()
         XCTAssertFalse(scanner.isScanning)
         XCTAssertEqual(driver.starts.count, 1)
-        await eventually { scanner.requiresRelaunch }
+        await eventually { scanner.canStartScan }
+        XCTAssertTrue(scanner.canStartScan)
     }
 
     func testSessionTimeoutRecoversAfterActivation() async {
@@ -188,6 +192,7 @@ final class NFCScannerTests: XCTestCase {
                 queue.async { self.gate.wait() }
             }
             func stop(scanID: UUID, message: String?, completion: @escaping () -> Void) { queue.async { completion() } }
+            func reset(scanID: UUID) { gate.signal() }
         }
         let driver = BlockedReader()
         defer { driver.gate.signal() }
@@ -227,7 +232,7 @@ final class NFCScannerTests: XCTestCase {
         let scanner = NFCScanner(driver: driver, timeouts: .init(cleanup: 20_000_000, retryDelay: 0))
         scanner.startScan()
         driver.emit(.failure(.init(kind: .interrupted, message: "Unexpected termination", diagnostic: "NFCError (202)")))
-        await eventually { scanner.requiresRelaunch }
+        await eventually { scanner.canStartScan }
         driver.completions[driver.starts[0]]?()
         await eventually { scanner.canStartScan }
         XCTAssertFalse(scanner.requiresRelaunch)
@@ -243,7 +248,7 @@ final class NFCScannerTests: XCTestCase {
         await eventually { scanner.canStartScan }
         driver.acknowledgesStop = false
         scanner.startScan()
-        await eventually { scanner.requiresRelaunch }
+        await eventually { scanner.canStartScan }
         for _ in 0..<30 { scanner.startScan(); scanner.startFeliCaScan() }
         XCTAssertEqual(driver.starts.count, 2)
         XCTAssertFalse(scanner.isScanning)

@@ -38,4 +38,5 @@ protocol NFCReaderDriving: AnyObject {
     /// Completion means the session is invalidated (or was never created), not
     /// merely that an invalidate request has been submitted to Core NFC.
     func stop(scanID: UUID, message: String?, completion: @escaping () -> Void)
+    func reset(scanID: UUID)
 }
