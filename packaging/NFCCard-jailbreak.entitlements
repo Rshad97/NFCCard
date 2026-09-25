@@ -2,10 +2,16 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>com.apple.developer.nfc.readersession.formats</key>
-    <array>
-        <string>TAG</string>
-    </array>
+	<key>com.apple.developer.nfc.readersession.formats</key>
+	<array>
+		<string>NDEF</string>
+		<string>TAG</string>
+	</array>
+	<!-- Core NFC is a system-framework client in the rootless jailbreak build.
+	     This is the same compatibility entitlement used by working jailbreak
+	     Core NFC readers; it is intentionally absent from normal Xcode builds. -->
+	<key>com.apple.private.skip-library-validation</key>
+	<true/>
     <key>platform-application</key>
     <true/>
 </dict>

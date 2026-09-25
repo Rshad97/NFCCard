@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.5
+
+- Add the NDEF reader format and jailbreak Core NFC framework compatibility entitlement to the rootless device signature. The 0.3.4 report showed iOS 17.5.1 invalidating every tag session before `didBecomeActive` (`NFCError 202`), so no card was ever polled.
+- Keep standard Xcode entitlements unchanged; the compatibility entitlement is only applied by the jailbreak packaging workflow.
+
 ## 0.3.4
 
 - Match the jailbreak executable's CodeDirectory signing identifier to its bundle identifier; the published 0.3.3 binary used `NFCCard` instead of `com.rashad.nfccard`.
