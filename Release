@@ -1,0 +1,17 @@
+Origin: NFCCard
+Label: NFCCard
+Suite: stable
+Version: 1.1
+Codename: ios
+Date: Fri, 25 Sep 2026 04:36:15 +0000
+Architectures: iphoneos-arm64
+Components: main
+Description: NFCCard rootless jailbreak package repository
+MD5Sum:
+ 790a34184cab4ea0a6ad40c85f843fc8              804 Packages
+ b0337fb5fcf64c643a3f9f9bdce7afac              558 Packages.gz
+ 0522911fb07d7998b778d3e5de346954              592 Packages.bz2
+SHA256:
+ 503cc4b21df0f065ee6236e49cc8233841af9a356dbe448120414bcf825731c6              804 Packages
+ 8e2b6b2239f4cd9f7125c3c9d99db913cec1c26d4892896d3c48cb92cd7db164              558 Packages.gz
+ 36c2f904b8c246faec6eb1013d78cba617c82c60783c1200f6a9cc2a2e9e4986              592 Packages.bz2
