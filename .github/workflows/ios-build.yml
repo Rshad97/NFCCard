@@ -29,6 +29,7 @@ jobs:
         run: |
           swift test
           python3 scripts/test-package-scripts.py
+          python3 scripts/test-wallet-pass.py
           bash scripts/test-signing-diagnostics.sh
 
       - name: Prepare app icon

@@ -5,6 +5,14 @@ struct CardDetailView: View {
 
     var body: some View {
         List {
+            Section("Apple Wallet") {
+                NavigationLink {
+                    WalletCardView(card: card)
+                } label: {
+                    Label("Prepare Wallet Card", systemImage: "wallet.pass")
+                }
+                .accessibilityIdentifier("card.wallet")
+            }
             Section("Identity") {
                 LabeledContent("Technology", value: card.technology)
                 if let subtype = card.subtype, !subtype.isEmpty {

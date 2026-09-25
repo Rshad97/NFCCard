@@ -12,3 +12,9 @@ NFCCard/Assets.xcassets/AppIcon.appiconset/AppIcon.png
 .build/
 build-simulator/
 test-results/
+*.pkpass
+*.p12
+*.pfx
+*.pem
+*.key
+__pycache__/

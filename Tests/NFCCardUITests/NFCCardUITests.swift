@@ -1,6 +1,39 @@
 import XCTest
 
 final class NFCCardUITests: XCTestCase {
+    func testWalletImportIsAvailableWithoutAnActiveScan() {
+        let app = XCUIApplication()
+        app.launch()
+        app.tabBars.buttons["Wallet"].tap()
+        XCTAssertTrue(app.buttons["wallet.import"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["wallet.access-limitation"].exists)
+        // An Add to Wallet button must not appear before a signed pass exists.
+        XCTAssertFalse(app.buttons["wallet.add-pass"].exists)
+    }
+
+    func testSavedSnapshotHasWalletPreviewWithoutExposingUIDByDefault() {
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-wallet"]
+        app.launch()
+        app.tabBars.buttons["Library"].tap()
+        let card = app.staticTexts["Wallet Test Card"].firstMatch
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        card.tap()
+        let wallet = app.buttons["card.wallet"]
+        XCTAssertTrue(wallet.waitForExistence(timeout: 5))
+        wallet.tap()
+        XCTAssertTrue(app.staticTexts["DISPLAY ONLY"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Not an access credential"].exists)
+        XCTAssertFalse(app.staticTexts["01020304050607"].exists)
+        let toggle = app.switches["wallet.include-identifier"]
+        XCTAssertTrue(toggle.exists)
+        toggle.tap()
+        XCTAssertTrue(app.staticTexts["01020304050607"].waitForExistence(timeout: 5))
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
     func testUnavailableNFCCanBeRetriedWithoutFreezingNavigation() {
         let app = XCUIApplication()
         app.launch()
