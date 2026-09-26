@@ -38,7 +38,9 @@ enum DESFireGetVersionReader {
             p1Parameter: 0x00,
             p2Parameter: 0x00,
             data: Data(),
-            expectedResponseLength: 0
+            // Core NFC requires Le to be 1...65536 or -1. For DESFire
+            // wrapped-native commands, 256 encodes a short Le of 0x00.
+            expectedResponseLength: 256
         )
 
         tag.sendCommand(apdu: apdu) { data, sw1, sw2, error in
