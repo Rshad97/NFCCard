@@ -6,7 +6,7 @@ final class NFCCardUITests: XCTestCase {
     }
 
     override func tearDownWithError() throws {
-        if testRun?.hasSucceeded == false {
+        if (testRun?.totalFailureCount ?? 0) > 0 {
             let app = XCUIApplication()
             attachScreenshot(app, name: "Failure screenshot")
             let hierarchy = XCTAttachment(string: app.debugDescription)
@@ -14,6 +14,31 @@ final class NFCCardUITests: XCTestCase {
             hierarchy.lifetime = .keepAlways
             add(hierarchy)
         }
+    }
+
+    func testNDEFWriteIsDisabledWithoutInspectionAndReadCanRetry() {
+        let app = XCUIApplication()
+        app.launch()
+        app.buttons["ndef.open"].tap()
+        let read = app.buttons["ndef.read"]
+        XCTAssertTrue(read.waitForExistence(timeout: 5))
+        let review = app.buttons["ndef.review"]
+        XCTAssertTrue(review.exists)
+        XCTAssertFalse(review.isEnabled)
+        let field = app.textViews["ndef.content"].exists ? app.textViews["ndef.content"] : app.textFields["ndef.content"]
+        XCTAssertTrue(field.exists)
+        field.tap()
+        field.typeText("Safe NDEF test draft")
+        app.buttons["ndef.done"].tap()
+        XCTAssertFalse(review.isEnabled, "A valid draft alone must never enable writing")
+        for _ in 0..<2 {
+            read.tap()
+            XCTAssertTrue(app.staticTexts["ndef.error"].waitForExistence(timeout: 12))
+            let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: read)
+            XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 5), .completed)
+            XCTAssertFalse(review.isEnabled)
+        }
+        attachScreenshot(app, name: "NDEF read failure remains retryable; writing disabled")
     }
 
     func testWalletImportIsAvailableWithoutAnActiveScan() {

@@ -6,6 +6,12 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             List {
+                Section("Read / Write") {
+                    NavigationLink { NDEFReadWriteView() } label: {
+                        Label("Read / Write NDEF", systemImage: "pencil.and.list.clipboard")
+                    }
+                    .accessibilityIdentifier("ndef.open")
+                }
                 Section {
                     Button {
                         scanner.startScan()

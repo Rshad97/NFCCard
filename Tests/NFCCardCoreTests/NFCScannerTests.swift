@@ -7,6 +7,12 @@ private final class FakeReader: NFCReaderDriving {
     var handlers: [UUID: (UUID, NFCReaderEvent) -> Void] = [:]
     var acknowledgesStop = true
     var completions: [UUID: () -> Void] = [:]
+    var ndefRequests: [NDEFRequest] = []
+    func startNDEF(scanID: UUID, profile: NFCScanProfile, request: NDEFRequest,
+                   eventHandler: @escaping (UUID, NFCReaderEvent) -> Void) {
+        ndefRequests.append(request)
+        start(scanID: scanID, profile: profile, eventHandler: eventHandler)
+    }
     func start(scanID: UUID, profile: NFCScanProfile, eventHandler: @escaping (UUID, NFCReaderEvent) -> Void) {
         starts.append(scanID)
         handlers[scanID] = eventHandler
@@ -26,6 +32,88 @@ private final class FakeReader: NFCReaderDriving {
 
 @MainActor
 final class NFCScannerTests: XCTestCase {
+    private func ndefSnapshot() -> NDEFReadResult {
+        NDEFReadResult(identity: "TEST-TAG", technology: "Test NDEF", access: .readWrite, capacity: 4096,
+                       records: try! NDEFWritePolicy.draft("private NDEF content", kind: .text), inspectedAt: .now)
+    }
+
+    func testNDEFWriteRequiresTheCurrentSuccessfulInspection() async {
+        let reader = FakeReader()
+        let scanner = NFCScanner(driver: reader, timeouts: .init(retryDelay: 0))
+        let inspected = ndefSnapshot()
+        let plan = NDEFWritePlan(before: inspected, replacement: try! NDEFWritePolicy.draft("replacement", kind: .text))
+        scanner.writeNDEF(confirmed: plan)
+        XCTAssertTrue(reader.starts.isEmpty)
+        scanner.readNDEF()
+        reader.emit(.ndefRead(inspected))
+        await eventually { scanner.canStartScan }
+        XCTAssertEqual(scanner.lastNDEFRead, inspected)
+        XCTAssertFalse(scanner.diagnosticReport.contains("private NDEF content"))
+        XCTAssertFalse(scanner.diagnosticReport.contains("TEST-TAG"))
+        scanner.writeNDEF(confirmed: plan)
+        XCTAssertEqual(reader.starts.count, 2)
+        XCTAssertTrue(reader.ndefRequests.last!.isWrite)
+        XCTAssertNil(scanner.lastNDEFRead)
+        scanner.readNDEF(); scanner.startScan()
+        XCTAssertEqual(reader.starts.count, 2, "All operations must share one reader")
+        scanner.cancelScan()
+        await eventually { scanner.canStartScan }
+    }
+
+    func testCanceledWriteWarnsAndDiscardsLateSuccess() async {
+        let reader = FakeReader()
+        let scanner = NFCScanner(driver: reader, timeouts: .init(retryDelay: 0))
+        let inspected = ndefSnapshot()
+        scanner.readNDEF(); reader.emit(.ndefRead(inspected))
+        await eventually { scanner.canStartScan }
+        scanner.writeNDEF(confirmed: .init(before: inspected, replacement: try! NDEFWritePolicy.draft("replacement", kind: .text)))
+        reader.emit(.ndefWriting)
+        await eventually { scanner.phase == .writing }
+        scanner.cancelScan()
+        reader.emit(.ndefWritten(inspected))
+        await eventually { scanner.canStartScan }
+        XCTAssertNil(scanner.lastNDEFRead)
+        XCTAssertTrue(scanner.errorMessage?.contains("may have changed") == true)
+        XCTAssertFalse(scanner.statusMessage.contains("verified"))
+        scanner.writeNDEF(confirmed: .init(before: inspected, replacement: try! NDEFWritePolicy.draft("replacement", kind: .text)))
+        XCTAssertEqual(reader.starts.count, 2, "A canceled write cannot reuse an old confirmation")
+    }
+
+    func testNDEFBackgroundingCancelsWriteAndNeverSavesItAsCardClone() async {
+        let reader = FakeReader()
+        let scanner = NFCScanner(driver: reader, timeouts: .init(retryDelay: 0))
+        let inspected = ndefSnapshot()
+        scanner.readNDEF(); reader.emit(.ndefRead(inspected))
+        await eventually { scanner.canStartScan }
+        scanner.writeNDEF(confirmed: .init(before: inspected, replacement: try! NDEFWritePolicy.draft("replacement", kind: .text)))
+        scanner.enteredBackground()
+        await eventually { scanner.canStartScan }
+        XCTAssertTrue(scanner.errorMessage?.contains("may have changed") == true)
+        XCTAssertNil(scanner.lastCard)
+        XCTAssertNil(scanner.lastNDEFRead)
+    }
+
+    func testOnlyVerifiedNDEFWriteSetsSuccess() async {
+        let reader = FakeReader()
+        let scanner = NFCScanner(driver: reader, timeouts: .init(retryDelay: 0))
+        let inspected = ndefSnapshot()
+        scanner.readNDEF(); reader.emit(.ndefRead(inspected))
+        await eventually { scanner.canStartScan }
+        let replacement = try! NDEFWritePolicy.draft("replacement", kind: .text)
+        scanner.writeNDEF(confirmed: .init(before: inspected, replacement: replacement))
+        reader.emit(.ndefVerifying)
+        await eventually { scanner.phase == .verifying }
+        XCTAssertTrue(scanner.isScanning)
+        XCTAssertNil(scanner.lastNDEFRead)
+        let result = NDEFReadResult(identity: inspected.identity, technology: inspected.technology,
+            access: .readWrite, capacity: inspected.capacity, records: replacement, inspectedAt: .now)
+        reader.emit(.ndefWritten(result))
+        await eventually { scanner.canStartScan }
+        XCTAssertEqual(scanner.statusMessage, "NDEF written and verified")
+        XCTAssertEqual(scanner.lastNDEFRead, result)
+        XCTAssertNil(scanner.lastCard)
+    }
+
     private func eventually(_ condition: () -> Bool, file: StaticString = #filePath, line: UInt = #line) async {
         for _ in 0..<200 {
             if condition() { return }

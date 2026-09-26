@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.8
+
+- Add Read / Write NDEF from Scan and Lab: inspect supported tags and display full text/URL or hex records.
+- Write one text or HTTP(S) URL record only after a successful inspection and explicit replacement confirmation. The second scan checks tag identifier, technology, write access, capacity, unchanged old content and a two-minute confirmation lifetime.
+- Read back and compare the complete message before reporting success. Transport failures/cancellation never trigger an automatic write retry and warn that content may have changed.
+- Reuse the single NFC reader/session coordinator, stale-callback guards, cleanup and retry recovery. No parallel NFC service or new signing privileges.
+- No UID changes, card emulation, protected DESFire/ACID writes, formatting or permanent locking. An NDEF-unsupported card remains unsupported.
+
 ## 0.3.7
 
 - Add a Wallet preparation screen to saved card snapshots and the Wallet tab, with an editable display name and an explicit display-only preview.

@@ -9,7 +9,7 @@ let package = Package(
     targets: [
         .target(name: "NFCCardCore", path: "NFCCard", exclude: [
             "App", "Views", "Assets.xcassets", "Security", "Info.plist", "NFCCard.entitlements",
-            "NFC/CoreNFCReader.swift", "NFC/NDEFInspector.swift", "NFC/NFCSigningDiagnostics.swift"
+            "NFC/CoreNFCReader.swift", "NFC/CoreNDEFTag.swift", "NFC/NDEFInspector.swift", "NFC/NFCSigningDiagnostics.swift"
         ], sources: ["Models", "Modules", "Services", "NFC/NFCScanner.swift", "NFC/NFCReaderDriver.swift", "NFC/NFCErrorDiagnostics.swift", "NFC/Data+Hex.swift"]),
         .testTarget(name: "NFCCardCoreTests", dependencies: ["NFCCardCore"], path: "Tests/NFCCardCoreTests")
     ]

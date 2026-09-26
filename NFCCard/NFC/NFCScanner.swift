@@ -3,7 +3,7 @@ import Combine
 
 @MainActor
 final class NFCScanner: ObservableObject {
-    enum Phase { case idle, starting, active, connecting, reading }
+    enum Phase { case idle, starting, active, connecting, reading, writing, verifying }
     struct Timeouts {
         var activation: UInt64 = 8_000_000_000
         var session: UInt64 = 55_000_000_000
@@ -21,6 +21,9 @@ final class NFCScanner: ObservableObject {
     @Published private(set) var errorDetails: String?
     @Published private(set) var isRecovering = false
     @Published private(set) var requiresRelaunch = false
+    @Published private(set) var lastNDEFRead: NDEFReadResult?
+    @Published private(set) var isNDEFOperation = false
+    private var isWriteOperation = false
 
     var isScanning: Bool { activeScanID != nil }
     var canStartScan: Bool { !isScanning && !isRecovering && !requiresRelaunch }
@@ -42,14 +45,29 @@ final class NFCScanner: ObservableObject {
     func startScan() { beginScan(profile: .standard) }
     func startFeliCaScan() { beginScan(profile: .felica) }
 
+    func readNDEF(profile: NFCScanProfile = .standard) { beginScan(profile: profile, ndef: .read) }
+
+    /// Called only from the explicit replacement confirmation, never from detection.
+    func writeNDEF(confirmed plan: NDEFWritePlan, profile: NFCScanProfile = .standard) {
+        guard canStartScan else { return }
+        do {
+            guard lastNDEFRead == plan.before else {
+                throw NDEFWritePolicy.Failure(reason: "The inspected tag changed. Read it again before writing.")
+            }
+            try NDEFWritePolicy.validate(plan)
+            beginScan(profile: profile, ndef: .write(plan))
+        } catch { errorMessage = error.localizedDescription }
+    }
+
     func cancelScan() {
         guard let id = activeScanID else { return }
-        finish(id: id, status: "Scan canceled")
+        finish(id: id, status: isWriteOperation ? "Write canceled — read tag to check" : "Scan canceled",
+               error: isWriteOperation ? Self.uncertainWrite : nil)
     }
 
     func enteredBackground() {
         guard let id = activeScanID else { return }
-        finish(id: id, status: "Scan stopped in background")
+        finish(id: id, status: "Scan stopped in background", error: isWriteOperation ? Self.uncertainWrite : nil)
     }
 
     func clearLog() { log.removeAll() }
@@ -63,13 +81,19 @@ final class NFCScanner: ObservableObject {
                  "Error: \(errorDetails ?? "None")", ""] + log).joined(separator: "\n")
     }
 
-    private func beginScan(profile: NFCScanProfile) {
+    private static let uncertainWrite = "The write was interrupted. The tag may have changed; read it again to check. No automatic retry was made."
+
+    private func beginScan(profile: NFCScanProfile, ndef: NDEFRequest? = nil) {
         guard canStartScan else { return }
         let id = UUID()
         activeScanID = id
+        isNDEFOperation = ndef != nil
+        isWriteOperation = ndef?.isWrite == true
+        // Inspection is single-use. A retry always needs a new read/confirmation.
+        lastNDEFRead = nil
         errorMessage = nil
         errorDetails = nil
-        currentScanProfile = profile.title
+        currentScanProfile = ndef == nil ? profile.title : (isWriteOperation ? "NDEF Write" : "NDEF Read")
         phase = .starting
         statusMessage = "Starting \(profile.title) reader…"
         appendLog("Starting \(profile.title), session \(id.uuidString.prefix(8))")
@@ -86,9 +110,11 @@ final class NFCScanner: ObservableObject {
             guard !Task.isCancelled else { return }
             self?.timedOut(id: id, activation: false)
         }
-        driver.start(scanID: id, profile: profile) { [weak self] id, event in
+        let handler: (UUID, NFCReaderEvent) -> Void = { [weak self] id, event in
             Task { @MainActor in self?.receive(event, id: id) }
         }
+        if let ndef { driver.startNDEF(scanID: id, profile: profile, request: ndef, eventHandler: handler) }
+        else { driver.start(scanID: id, profile: profile, eventHandler: handler) }
     }
 
     private func receive(_ event: NFCReaderEvent, id: UUID) {
@@ -114,8 +140,25 @@ final class NFCScanner: ObservableObject {
             appendLog("Connecting to tag")
         case .reading:
             phase = .reading
-            statusMessage = "Reading public metadata…"
-            appendLog("Reading public metadata")
+            statusMessage = isNDEFOperation ? "Reading NDEF…" : "Reading public metadata…"
+            appendLog(isNDEFOperation ? "Reading NDEF; payload omitted from log" : "Reading public metadata")
+        case .ndefRead(let result):
+            guard isNDEFOperation, !isWriteOperation else { return }
+            lastNDEFRead = result
+            finish(id: id, status: result.records == nil ? "NDEF unsupported" : "NDEF read complete")
+        case .ndefWriting:
+            guard isWriteOperation else { return }
+            phase = .writing
+            statusMessage = "Writing NDEF — hold tag still…"
+            appendLog("NDEF write issued; payload omitted")
+        case .ndefVerifying:
+            guard isWriteOperation else { return }
+            phase = .verifying
+            statusMessage = "Verifying NDEF by reading back…"
+        case .ndefWritten(let result):
+            guard isWriteOperation else { return }
+            lastNDEFRead = result
+            finish(id: id, status: "NDEF written and verified")
         case .card(var card):
             card.matchedModules = CardModuleRegistry.matches(for: card)
             card.capabilities = CapabilityMapService.capabilities(for: card)
@@ -128,7 +171,8 @@ final class NFCScanner: ObservableObject {
         case .failure(let failure):
             let canceled = failure.kind == .canceled
             finish(id: id, status: canceled ? "Scan canceled" : "Scan failed",
-                   error: canceled ? nil : failure.message, details: failure.diagnostic,
+                   error: canceled ? (isWriteOperation ? Self.uncertainWrite : nil) :
+                    ((isWriteOperation && (phase == .writing || phase == .verifying)) ? failure.message + " " + Self.uncertainWrite : failure.message), details: failure.diagnostic,
                    invalidateMessage: canceled ? nil : "NFC scan ended. See NFCCard for details.")
         }
     }
@@ -142,7 +186,7 @@ final class NFCScanner: ObservableObject {
                    invalidateMessage: "Could not start the NFC reader.")
         } else {
             finish(id: id, status: "Session timed out",
-                   error: "The NFC scan timed out. Try again with one card near the top of the iPhone.",
+                   error: isWriteOperation ? Self.uncertainWrite : "The NFC scan timed out. Try again with one card near the top of the iPhone.",
                    details: "Session deadline expired.", invalidateMessage: "The NFC scan timed out.")
         }
     }
@@ -153,6 +197,9 @@ final class NFCScanner: ObservableObject {
         // Release the interface immediately, but do not start a second hardware
         // session until the previous session has acknowledged invalidation.
         activeScanID = nil
+        let wasWriting = isWriteOperation
+        isWriteOperation = false
+        isNDEFOperation = false
         activationWatchdog?.cancel()
         activationWatchdog = nil
         sessionWatchdog?.cancel()
@@ -171,7 +218,7 @@ final class NFCScanner: ObservableObject {
             self.driver.reset(scanID: id)
             self.isRecovering = false
             self.requiresRelaunch = false
-            self.errorMessage = "The previous NFC session did not close normally. The stale session was released; you can retry now."
+            self.errorMessage = "The previous NFC session did not close normally. The stale session was released; you can retry now." + (wasWriting ? " " + Self.uncertainWrite : "")
             self.appendLog("Cleanup deadline expired; stale reader released in-app and retry enabled.")
         }
         driver.stop(scanID: id, message: invalidateMessage) { [weak self] in
