@@ -5,7 +5,7 @@ enum DESFireVersionParser {
         let statuses = statusWords.map { String(format: "%04X", $0) }
         let continuationOK = statusWords.dropLast().allSatisfy { $0 == 0x91AF }
         let finalOK = statusWords.last == 0x9100
-        let recognized = payload.count >= 14 && continuationOK && finalOK
+        let recognized = payload.count >= 28 && continuationOK && finalOK
 
         var details: [String: String] = [:]
 
