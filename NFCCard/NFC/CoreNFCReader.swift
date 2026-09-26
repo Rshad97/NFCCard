@@ -12,9 +12,21 @@ final class CoreNFCReader: NSObject, NFCReaderDriving, NFCTagReaderSessionDelega
     private var inspection: NDEFInspection?
     private var stopCompletion: (() -> Void)?
     private var becameActive = false
+    private var ndefRequest: NDEFRequest?
+    private var ndefTransaction: NDEFTransaction?
 
     func start(scanID: UUID, profile: NFCScanProfile,
                eventHandler: @escaping (UUID, NFCReaderEvent) -> Void) {
+        begin(scanID: scanID, profile: profile, ndef: nil, eventHandler: eventHandler)
+    }
+
+    func startNDEF(scanID: UUID, profile: NFCScanProfile, request: NDEFRequest,
+                   eventHandler: @escaping (UUID, NFCReaderEvent) -> Void) {
+        begin(scanID: scanID, profile: profile, ndef: request, eventHandler: eventHandler)
+    }
+
+    private func begin(scanID: UUID, profile: NFCScanProfile, ndef: NDEFRequest?,
+                       eventHandler: @escaping (UUID, NFCReaderEvent) -> Void) {
         queue.async {
             guard self.scanID == nil, self.session == nil else {
                 eventHandler(scanID, .failure(.init(kind: .busy,
@@ -24,6 +36,7 @@ final class CoreNFCReader: NSObject, NFCReaderDriving, NFCTagReaderSessionDelega
             }
             self.scanID = scanID
             self.eventHandler = eventHandler
+            self.ndefRequest = ndef
             self.becameActive = false
             self.emit(.diagnostic("Checking Core NFC availability"))
             let available = NFCReaderSession.readingAvailable
@@ -60,7 +73,9 @@ final class CoreNFCReader: NSObject, NFCReaderDriving, NFCTagReaderSessionDelega
             }
             self.session = reader
             self.emit(.diagnostic("Tag reader created; setting prompt"))
-            reader.alertMessage = "Hold the top of your iPhone near one NFC card."
+            reader.alertMessage = ndef?.isWrite == true
+                ? "Hold the SAME inspected tag steady. Its NDEF content will be replaced and verified."
+                : "Hold the top of your iPhone near one NFC card."
             self.emit(.diagnostic("Calling Core NFC begin"))
             reader.begin()
             self.emit(.diagnostic("Core NFC begin returned; waiting for activation"))
@@ -70,6 +85,8 @@ final class CoreNFCReader: NSObject, NFCReaderDriving, NFCTagReaderSessionDelega
     func stop(scanID: UUID, message: String?, completion: @escaping () -> Void) {
         queue.async {
             guard self.scanID == scanID else { completion(); return }
+            self.ndefTransaction?.cancel()
+            self.ndefTransaction = nil
             self.inspection?.cancel()
             self.inspection = nil
             guard let session = self.session else {
@@ -88,6 +105,8 @@ final class CoreNFCReader: NSObject, NFCReaderDriving, NFCTagReaderSessionDelega
     func reset(scanID: UUID) {
         queue.async {
             guard self.scanID == scanID else { return }
+            self.ndefTransaction?.cancel()
+            self.ndefTransaction = nil
             self.inspection?.cancel()
             self.inspection = nil
             self.session?.invalidate()
@@ -104,6 +123,9 @@ final class CoreNFCReader: NSObject, NFCReaderDriving, NFCTagReaderSessionDelega
         inspection?.cancel()
         inspection = nil
         stopCompletion = nil
+        ndefTransaction?.cancel()
+        ndefTransaction = nil
+        ndefRequest = nil
     }
 
     private func emit(_ event: NFCReaderEvent) {
@@ -129,6 +151,8 @@ final class CoreNFCReader: NSObject, NFCReaderDriving, NFCTagReaderSessionDelega
             // A spontaneous invalidation already confirms closure. Preserve
             // ownership until the coordinator consumes the failure and stops.
             self.session = nil
+            self.ndefTransaction?.cancel()
+            self.ndefTransaction = nil
             self.inspection?.cancel()
             self.inspection = nil
             self.emit(.diagnostic("Core NFC invalidated; became active=\(self.becameActive)"))
@@ -160,6 +184,30 @@ final class CoreNFCReader: NSObject, NFCReaderDriving, NFCTagReaderSessionDelega
                     }
                     self.emit(.reading)
                     let card = self.baseProfile(for: tag)
+                    if let request = self.ndefRequest {
+                        guard let access = CoreNDEFTag(tag: tag, card: card) else {
+                            self.emit(.failure(.init(kind: .other, message: "This tag does not expose NDEF.", diagnostic: "No NDEF adapter")))
+                            return
+                        }
+                        let transaction = NDEFTransaction(tag: access, request: request, queue: self.queue) { [weak self] event in
+                            guard let self, self.session === session, self.stopCompletion == nil else { return }
+                            switch event {
+                            case .writing:
+                                session.alertMessage = "Writing NDEF. Keep the tag still until verification finishes."
+                                self.emit(.ndefWriting)
+                            case .verifying:
+                                session.alertMessage = "Reading back the tag to verify the write…"
+                                self.emit(.ndefVerifying)
+                            case .read(let result): self.emit(.ndefRead(result))
+                            case .verified(let result): self.emit(.ndefWritten(result))
+                            case .failed(let message):
+                                self.emit(.failure(.init(kind: .other, message: message, diagnostic: "NDEF transaction failed; payload omitted")))
+                            }
+                        }
+                        self.ndefTransaction = transaction
+                        transaction.start()
+                        return
+                    }
                     self.inspection = NDEFInspector.inspect(tag: tag, queue: self.queue) { metadata in
                         guard self.session === session, self.stopCompletion == nil else { return }
                         var result = card

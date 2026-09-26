@@ -6,6 +6,9 @@ struct LabView: View {
     var body: some View {
         NavigationStack {
             List {
+                Section("Tag operations") {
+                    NavigationLink("Read / Write NDEF") { NDEFReadWriteView() }
+                }
                 Section("Protocol Modules") {
                     ForEach(CardModuleRegistry.modules.map(\.descriptor)) { module in
                         VStack(alignment: .leading, spacing: 4) {

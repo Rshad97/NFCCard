@@ -27,6 +27,10 @@ enum NFCReaderEvent {
     case connecting
     case reading
     case card(NFCCardProfile)
+    case ndefRead(NDEFReadResult)
+    case ndefWriting
+    case ndefVerifying
+    case ndefWritten(NDEFReadResult)
     case failure(NFCReaderFailure)
 }
 
@@ -35,8 +39,18 @@ enum NFCReaderEvent {
 protocol NFCReaderDriving: AnyObject {
     func start(scanID: UUID, profile: NFCScanProfile,
                eventHandler: @escaping (UUID, NFCReaderEvent) -> Void)
+    func startNDEF(scanID: UUID, profile: NFCScanProfile, request: NDEFRequest,
+                   eventHandler: @escaping (UUID, NFCReaderEvent) -> Void)
     /// Completion means the session is invalidated (or was never created), not
     /// merely that an invalidate request has been submitted to Core NFC.
     func stop(scanID: UUID, message: String?, completion: @escaping () -> Void)
     func reset(scanID: UUID)
+}
+
+extension NFCReaderDriving {
+    func startNDEF(scanID: UUID, profile: NFCScanProfile, request: NDEFRequest,
+                   eventHandler: @escaping (UUID, NFCReaderEvent) -> Void) {
+        eventHandler(scanID, .failure(.init(kind: .unavailable,
+            message: "This reader does not implement NDEF read/write.", diagnostic: "NDEF operation unavailable")))
+    }
 }
