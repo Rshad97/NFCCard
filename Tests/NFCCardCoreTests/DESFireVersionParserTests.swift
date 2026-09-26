@@ -50,7 +50,7 @@ final class DESFireVersionParserTests: XCTestCase {
             observedUIDHex: nil
         )
 
-        XCTAssertTrue(result.recognized)
+        XCTAssertFalse(result.recognized)
         XCTAssertEqual(result.statusText, "91AF → 9100")
     }
 
