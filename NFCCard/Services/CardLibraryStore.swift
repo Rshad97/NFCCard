@@ -24,7 +24,7 @@ final class CardLibraryStore: ObservableObject {
             storageError = "Could not create the card library directory: \(error.localizedDescription)"
         }
 
-        fileURL = directory.appendingPathComponent("cards.json")
+        self.fileURL = directory.appendingPathComponent("cards.json")
         load()
     }
 
