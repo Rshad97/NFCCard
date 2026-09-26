@@ -8,7 +8,7 @@ struct HomeView: View {
             List {
                 Section("Read / Write") {
                     NavigationLink { NDEFReadWriteView() } label: {
-                        Label("Read / Write NDEF", systemImage: "pencil.and.list.clipboard")
+                        Label("Read / Write NDEF", systemImage: "square.and.pencil")
                     }
                     .accessibilityIdentifier("ndef.open")
                 }

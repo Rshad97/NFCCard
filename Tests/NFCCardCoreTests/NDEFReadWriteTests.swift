@@ -2,11 +2,11 @@ import XCTest
 @testable import NFCCardCore
 
 private let testTime = Date(timeIntervalSince1970: 1_700_000_000)
-private func record(_ text: String = "before") -> [NDEFRecordData] {
+private func testNDEFRecords(_ text: String = "before") -> [NDEFRecordData] {
     try! NDEFWritePolicy.draft(text, kind: .text)
 }
 private func snapshot(identity: String = "TEST-TAG", access: NDEFMetadata.Access = .readWrite,
-                      capacity: Int = 4096, records: [NDEFRecordData]? = record(),
+                      capacity: Int = 4096, records: [NDEFRecordData]? = testNDEFRecords(),
                       date: Date = testTime) -> NDEFReadResult {
     NDEFReadResult(identity: identity, technology: "Test NDEF", access: access,
                    capacity: capacity, records: records, inspectedAt: date)
@@ -20,8 +20,8 @@ final class NDEFWritePolicyTests: XCTestCase {
         XCTAssertEqual(NDEFWritePolicy.byteCount(message), "مرحبا".utf8.count + 7)
     }
     func testLongRecordHeaderBoundary() {
-        XCTAssertEqual(record(String(repeating: "a", count: 252))[0].encodedLength, 259)
-        XCTAssertEqual(record(String(repeating: "a", count: 253))[0].encodedLength, 263)
+        XCTAssertEqual(testNDEFRecords(String(repeating: "a", count: 252))[0].encodedLength, 259)
+        XCTAssertEqual(testNDEFRecords(String(repeating: "a", count: 253))[0].encodedLength, 263)
     }
     func testURLRoundTripAndUnsupportedSchemesRejected() throws {
         let message = try NDEFWritePolicy.draft("https://example.com/test", kind: .url)
@@ -37,35 +37,35 @@ final class NDEFWritePolicyTests: XCTestCase {
     }
     func testReadOnlyUnsupportedUnknownAndMissingIdentityCannotWrite() {
         for before in [snapshot(access: .readOnly), snapshot(access: .unsupported), snapshot(access: .unknown), snapshot(identity: ""), snapshot(records: nil)] {
-            XCTAssertThrowsError(try NDEFWritePolicy.validate(NDEFWritePlan(before: before, replacement: record("new")), now: testTime))
+            XCTAssertThrowsError(try NDEFWritePolicy.validate(NDEFWritePlan(before: before, replacement: testNDEFRecords("new")), now: testTime))
         }
     }
     func testCapacityIncludesRecordOverhead() {
-        let replacement = record("new")
+        let replacement = testNDEFRecords("new")
         let count = NDEFWritePolicy.byteCount(replacement)
         XCTAssertNoThrow(try NDEFWritePolicy.validate(NDEFWritePlan(before: snapshot(capacity: count), replacement: replacement), now: testTime))
         XCTAssertThrowsError(try NDEFWritePolicy.validate(NDEFWritePlan(before: snapshot(capacity: count - 1), replacement: replacement), now: testTime))
     }
     func testExpiredAndFutureInspectionRejected() {
         for seconds in [-121.0, 1.0] {
-            let plan = NDEFWritePlan(before: snapshot(date: testTime.addingTimeInterval(seconds)), replacement: record("new"))
+            let plan = NDEFWritePlan(before: snapshot(date: testTime.addingTimeInterval(seconds)), replacement: testNDEFRecords("new"))
             XCTAssertThrowsError(try NDEFWritePolicy.validate(plan, now: testTime))
         }
     }
     func testMalformedReplacementAndMultipleRecordsRejected() {
         let malformed = NDEFRecordData(format: 1, type: Data([0x54]), identifier: Data(), payload: Data([63]))
-        for replacement in [[], [malformed], record() + record()] {
+        for replacement in [[], [malformed], testNDEFRecords() + testNDEFRecords()] {
             XCTAssertThrowsError(try NDEFWritePolicy.validate(NDEFWritePlan(before: snapshot(), replacement: replacement), now: testTime))
         }
     }
     func testChangedTagContentOrStatusRejected() {
-        let plan = NDEFWritePlan(before: snapshot(), replacement: record("new"))
-        for current in [snapshot(identity: "OTHER-TAG"), snapshot(records: record("changed")), snapshot(access: .readOnly), snapshot(capacity: 1)] {
+        let plan = NDEFWritePlan(before: snapshot(), replacement: testNDEFRecords("new"))
+        for current in [snapshot(identity: "OTHER-TAG"), snapshot(records: testNDEFRecords("changed")), snapshot(access: .readOnly), snapshot(capacity: 1)] {
             XCTAssertThrowsError(try NDEFWritePolicy.validateTarget(current, plan: plan, now: testTime))
         }
     }
     func testReadLimitsAndMalformedTextDoNotCrash() {
-        XCTAssertThrowsError(try NDEFWritePolicy.validateRead(Array(repeating: record()[0], count: 129)))
+        XCTAssertThrowsError(try NDEFWritePolicy.validateRead(Array(repeating: testNDEFRecords()[0], count: 129)))
         let huge = NDEFRecordData(format: 1, type: Data([0x54]), identifier: Data(), payload: Data(repeating: 1, count: 65_536))
         XCTAssertThrowsError(try NDEFWritePolicy.validateRead([huge]))
         let short = NDEFRecordData(format: 1, type: Data([0x54]), identifier: Data(), payload: Data([63]))
@@ -92,7 +92,7 @@ private final class TransactionHarness {
     let tag = FakeNDEFTag()
     var events: [NDEFTransaction.Event] = []
     var transaction: NDEFTransaction!
-    init(_ request: NDEFRequest = .write(NDEFWritePlan(before: snapshot(), replacement: record("after")))) {
+    init(_ request: NDEFRequest = .write(NDEFWritePlan(before: snapshot(), replacement: testNDEFRecords("after")))) {
         transaction = NDEFTransaction(tag: tag, request: request, queue: queue, now: { testTime }) { [weak self] in self?.events.append($0) }
         queue.sync { transaction.start() }
     }
@@ -100,7 +100,7 @@ private final class TransactionHarness {
         tag.queryCallback?(.success(NDEFTagStatus(access: access, capacity: capacity)))
         flush()
     }
-    func read(_ value: [NDEFRecordData] = record(), index: Int = 0) {
+    func read(_ value: [NDEFRecordData] = testNDEFRecords(), index: Int = 0) {
         tag.reads[index](.success(value)); flush()
     }
     func wrote(error: Error? = nil) { tag.writeCallback?(error); flush() }
@@ -113,10 +113,10 @@ private final class TransactionHarness {
 final class NDEFTransactionTests: XCTestCase {
     func testReadNeverWritesAndReturnsFullMessage() {
         let h = TransactionHarness(.read)
-        h.status(.readOnly); h.read(record("read only content"))
+        h.status(.readOnly); h.read(testNDEFRecords("read only content"))
         XCTAssertTrue(h.tag.writes.isEmpty)
         guard case .read(let result)? = h.events.last else { return XCTFail("No read result") }
-        XCTAssertEqual(result.records, record("read only content"))
+        XCTAssertEqual(result.records, testNDEFRecords("read only content"))
         XCTAssertEqual(result.access, .readOnly)
     }
     func testUnsupportedReadReturnsUnsupportedWithoutTryingToRead() {
@@ -157,23 +157,23 @@ final class NDEFTransactionTests: XCTestCase {
         }
     }
     func testChangedContentAndReducedCapacityPreventWrite() {
-        let changed = TransactionHarness(); changed.status(); changed.read(record("changed"))
+        let changed = TransactionHarness(); changed.status(); changed.read(testNDEFRecords("changed"))
         XCTAssertTrue(changed.failed); XCTAssertTrue(changed.tag.writes.isEmpty)
         let small = TransactionHarness(); small.status(capacity: 1); small.read()
         XCTAssertTrue(small.failed); XCTAssertTrue(small.tag.writes.isEmpty)
     }
     func testBlankWritableTagCanBeWrittenAndVerified() {
-        let h = TransactionHarness(.write(NDEFWritePlan(before: snapshot(records: []), replacement: record("after"))))
-        h.status(); h.read([]); h.wrote(); h.read(record("after"), index: 1)
+        let h = TransactionHarness(.write(NDEFWritePlan(before: snapshot(records: []), replacement: testNDEFRecords("after"))))
+        h.status(); h.read([]); h.wrote(); h.read(testNDEFRecords("after"), index: 1)
         XCTAssertEqual(h.tag.writes.count, 1)
         XCTAssertTrue(h.verified)
     }
     func testWriteSuccessIsNotReportedUntilExactReadBack() {
         let h = TransactionHarness(); h.status(); h.read()
-        XCTAssertEqual(h.tag.writes, [record("after")])
+        XCTAssertEqual(h.tag.writes, [testNDEFRecords("after")])
         XCTAssertFalse(h.verified)
         h.wrote(); XCTAssertFalse(h.verified)
-        h.read(record("after"), index: 1)
+        h.read(testNDEFRecords("after"), index: 1)
         XCTAssertTrue(h.verified); XCTAssertFalse(h.failed)
     }
     func testWriteErrorDoesNotRetryOrClaimSuccess() {
@@ -185,7 +185,7 @@ final class NDEFTransactionTests: XCTestCase {
     }
     func testVerificationMismatchAndErrorAreFailures() {
         let h = TransactionHarness(); h.status(); h.read(); h.wrote()
-        h.read(record("unexpected"), index: 1)
+        h.read(testNDEFRecords("unexpected"), index: 1)
         XCTAssertTrue(h.failed); XCTAssertFalse(h.verified)
         let error = TransactionHarness(); error.status(); error.read(); error.wrote()
         error.tag.reads[1](.failure(NDEFWritePolicy.Failure(reason: "removed"))); error.flush()
@@ -206,11 +206,11 @@ final class NDEFTransactionTests: XCTestCase {
     func testDuplicateCallbacksNeverCauseDuplicateWrite() {
         let h = TransactionHarness(); h.status(); h.status(); h.read(); h.read(); h.wrote(); h.wrote()
         XCTAssertEqual(h.tag.writes.count, 1); XCTAssertEqual(h.tag.reads.count, 2)
-        h.read(record("after"), index: 1); h.read(record("after"), index: 1)
+        h.read(testNDEFRecords("after"), index: 1); h.read(testNDEFRecords("after"), index: 1)
         XCTAssertEqual(h.events.filter { if case .verified = $0 { return true }; return false }.count, 1)
     }
     func testExpiredConfirmationNeverReadsOrWrites() {
-        let h = TransactionHarness(.write(NDEFWritePlan(before: snapshot(date: testTime.addingTimeInterval(-121)), replacement: record("after"))))
+        let h = TransactionHarness(.write(NDEFWritePlan(before: snapshot(date: testTime.addingTimeInterval(-121)), replacement: testNDEFRecords("after"))))
         h.status(); XCTAssertTrue(h.failed)
         XCTAssertTrue(h.tag.reads.isEmpty); XCTAssertTrue(h.tag.writes.isEmpty)
     }
