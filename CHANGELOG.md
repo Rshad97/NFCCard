@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.1
+- Fix the read-only DESFire GetVersion transport on Core NFC by using a valid 256-byte expected response length, which encodes the short ISO 7816 Le field as `00`.
+- Prevent `NFCError 102 / nfcd Invalid Parameter` caused by the invalid zero expected-response length used in 0.4.0.
+- Keep the probe read-only: GetVersion and bounded Additional Frame commands only.
+
 ## 0.4.0
 - Add an explicit **read-only DESFire GetVersion probe** for ISO 7816 cards from Card Snapshot.
 - Follow DESFire continuation status `91AF` with read-only `Additional Frame` requests and stop after a bounded number of frames.
