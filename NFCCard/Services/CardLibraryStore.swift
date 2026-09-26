@@ -8,7 +8,12 @@ final class CardLibraryStore: ObservableObject {
 
     private let fileURL: URL
 
-    init() {
+    init(fileURL: URL? = nil) {
+        if let fileURL {
+            self.fileURL = fileURL
+            load()
+            return
+        }
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
         let directory = base.appendingPathComponent("NFCCard", isDirectory: true)
@@ -19,18 +24,22 @@ final class CardLibraryStore: ObservableObject {
             storageError = "Could not create the card library directory: \(error.localizedDescription)"
         }
 
-        fileURL = directory.appendingPathComponent("cards.json")
+        self.fileURL = directory.appendingPathComponent("cards.json")
         load()
     }
 
-    func save(_ card: NFCCardProfile) {
+    @discardableResult
+    func save(_ card: NFCCardProfile) -> Bool {
+        let previous = cards
         if let genome = card.genome,
            let index = cards.firstIndex(where: { $0.genome == genome }) {
             cards[index] = card
         } else {
             cards.insert(card, at: 0)
         }
-        persist()
+        if persist() { return true }
+        cards = previous
+        return false
     }
 
     func remove(at offsets: IndexSet) {
@@ -52,13 +61,16 @@ final class CardLibraryStore: ObservableObject {
         }
     }
 
-    private func persist() {
+    @discardableResult
+    private func persist() -> Bool {
         do {
             let data = try JSONEncoder.nfccard.encode(cards)
             try data.write(to: fileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
             storageError = nil
+            return true
         } catch {
             storageError = "Could not save the card library: \(error.localizedDescription)"
+            return false
         }
     }
 }

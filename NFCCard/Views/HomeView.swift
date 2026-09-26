@@ -6,17 +6,11 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Read / Write") {
-                    NavigationLink { NDEFReadWriteView() } label: {
-                        Label("Read / Write NDEF", systemImage: "square.and.pencil")
-                    }
-                    .accessibilityIdentifier("ndef.open")
-                }
                 Section {
                     Button {
                         scanner.startScan()
                     } label: {
-                        Label(scanner.isScanning ? "Scanning…" : "Analyze NFC Card", systemImage: "wave.3.right.circle.fill")
+                        Label(scanner.isScanning ? "Scanning…" : "Add / Analyze NFC Card", systemImage: "wave.3.right.circle.fill")
                     }
                     .disabled(!scanner.canStartScan)
                     .accessibilityIdentifier("scan.standard")
@@ -53,8 +47,17 @@ struct HomeView: View {
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.trailing)
                     }
+                } header: {
+                    Text("Add a card to Library")
                 } footer: {
-                    Text("Hold one card near the top of your iPhone. Use the separate FeliCa option for NFC-F cards.")
+                    Text("This saves a public card snapshot even without NDEF support. Open it in Library to prepare a Wallet display pass. Hold one card near the top of your iPhone.")
+                }
+
+                Section("Read / Write") {
+                    NavigationLink { NDEFReadWriteView() } label: {
+                        Label("Read / Write NDEF", systemImage: "square.and.pencil")
+                    }
+                    .accessibilityIdentifier("ndef.open")
                 }
 
                 if let error = scanner.errorMessage {

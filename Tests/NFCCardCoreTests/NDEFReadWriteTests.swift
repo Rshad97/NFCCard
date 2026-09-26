@@ -13,6 +13,17 @@ private func snapshot(identity: String = "TEST-TAG", access: NDEFMetadata.Access
 }
 
 final class NDEFWritePolicyTests: XCTestCase {
+    func testCardSnapshotPreservesAvailableRecordsAndBoundsPreviews() {
+        let result = snapshot(records: testNDEFRecords(String(repeating: "x", count: 1000)))
+        let card = result.cardSnapshot
+        XCTAssertEqual(card.uidHex, result.identity)
+        XCTAssertEqual(card.technology, result.technology)
+        XCTAssertEqual(card.ndef?.records.count, 1)
+        XCTAssertEqual(card.ndef?.records.first?.payloadPreview.count, 512)
+        XCTAssertEqual(card.ndef?.records.first?.payloadLength, 1003)
+        XCTAssertNotNil(card.genome)
+    }
+
     func testUTF8TextRoundTripAndExactEncodedLength() throws {
         let message = try NDEFWritePolicy.draft("مرحبا", kind: .text)
         XCTAssertEqual(message[0].displayValue, "مرحبا")

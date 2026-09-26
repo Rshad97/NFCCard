@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.9
+- Restore a prominent Add / Analyze NFC Card entry point on Scan.
+- Offer explicit Save Card to Library and the existing Wallet display-pass flow directly after NDEF inspection, including NDEF-unsupported ISO 7816 cards.
+- Preserve public card metadata (including the initial AID) across the NDEF inspection path; save failures are reported and never shown as success.
+- Correct unsupported-NDEF messaging: this is not proof of encryption or total memory size. Non-NDEF writing still requires a card-specific protocol implementation and any required authentication; no speculative writes or new emulation are added.
+
 ## 0.3.8
 
 - Add Read / Write NDEF from Scan and Lab: inspect supported tags and display full text/URL or hex records.

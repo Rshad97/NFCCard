@@ -43,7 +43,7 @@ struct CardDetailView: View {
             if let ndef = card.ndef {
                 Section("NDEF") {
                     LabeledContent("Access", value: ndef.access.rawValue)
-                    LabeledContent("Capacity", value: "\(ndef.capacity) bytes")
+                    LabeledContent("NDEF capacity", value: ndef.access == .unsupported ? "Not available" : "\(ndef.capacity) bytes")
                     LabeledContent("Records", value: "\(ndef.records.count)")
                     ForEach(ndef.records) { record in
                         VStack(alignment: .leading, spacing: 4) {
