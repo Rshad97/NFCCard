@@ -70,7 +70,7 @@ struct CardDetailView: View {
             if displayedCard.technology.localizedCaseInsensitiveContains("ISO 7816") {
                 Section("Chip Identification") {
                     Button {
-                        scanner.startDESFireProbe(expectedUIDHex: displayedCard.uidHex)
+                        scanner.startDESFireProbe(for: displayedCard)
                     } label: {
                         Label(
                             scanner.isProbeOperation ? "Running Read-Only Probe…" : "Run DESFire GetVersion Probe",
