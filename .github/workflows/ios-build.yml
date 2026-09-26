@@ -40,6 +40,7 @@ jobs:
         run: xcodegen generate
 
       - name: Test scan recovery and Wallet on iPhone simulator
+        if: ${{ github.event_name == 'pull_request' }}
         timeout-minutes: 12
         run: |
           set -euo pipefail
