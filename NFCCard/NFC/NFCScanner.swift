@@ -234,6 +234,10 @@ final class NFCScanner: ObservableObject {
                 }
             }
 
+            if result.recognized {
+                card.subtype = "MIFARE DESFire-compatible"
+            }
+
             card.details["DESFire Probe"] = result.summary
             card.details["DESFire Status Words"] = result.statusText
             if !result.rawResponseHex.isEmpty {
