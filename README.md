@@ -4,6 +4,12 @@ NFCCard is an open-source iPhone NFC research and interoperability toolkit. It i
 
 The project is protocol-first and vendor-neutral. It contains no dependency on a specific access-control deployment, issuer, reader vendor, or private infrastructure.
 
+## Read-only card identification — 0.4.0
+
+NFCCard 0.4.0 adds an explicit ISO 7816 **DESFire GetVersion** probe from Card Snapshot. The probe is identification-only: it sends GetVersion and bounded continuation commands, parses public version metadata, checks that the presented card matches the snapshot UID when available, and stores the resulting technical metadata locally.
+
+It does **not** authenticate, recover keys, change keys, write card memory, format the card, or alter an access credential. A successful GetVersion response supports a conservative “DESFire-compatible” identification; it does not infer a deployment's access keys or authorization policy.
+
 ## Wallet development — 0.3.7
 
 The Wallet screen now supports local display previews, unsigned pass-source export, and importing issuer-signed `.pkpass` files through Apple's confirmation sheet. An offline signing tool is included; a valid Apple Pass Type ID certificate is **not** supplied. See [Wallet setup](docs/APPLE_WALLET.md).

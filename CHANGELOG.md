@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0
+- Add an explicit **read-only DESFire GetVersion probe** for ISO 7816 cards from Card Snapshot.
+- Follow DESFire continuation status `91AF` with read-only `Additional Frame` requests and stop after a bounded number of frames.
+- Parse public version metadata conservatively: vendor, hardware/software version fields, storage-size code, protocol fields, version UID, batch number and production codes.
+- Never authenticate, change keys, write memory, format a card, select application data for modification, or alter an access credential during this probe.
+- Require the physical card presented for the probe to match the Card Snapshot UID when an identifier is available.
+- Correct ISO 7816 presentation so the initial selected AID is technical data rather than being mislabeled as the card subtype.
+- Persist successful probe metadata into the local Card Library and include status-only probe diagnostics without logging the raw response payload.
+
 ## 0.3.9
 - Restore a prominent Add / Analyze NFC Card entry point on Scan.
 - Offer explicit Save Card to Library and the existing Wallet display-pass flow directly after NDEF inspection, including NDEF-unsupported ISO 7816 cards.

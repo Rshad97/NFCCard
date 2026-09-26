@@ -171,8 +171,8 @@ jobs:
           name: NFCCard-DEB
           path: packages/*.deb
 
-      - name: Publish standalone Sileo repo
-        if: ${{ false }} # Disabled: NFCCard must not overwrite the shared Rashad Repo gh-pages source
+      - name: Publish NFCCard distribution repo
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}

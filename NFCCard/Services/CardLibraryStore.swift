@@ -31,8 +31,10 @@ final class CardLibraryStore: ObservableObject {
     @discardableResult
     func save(_ card: NFCCardProfile) -> Bool {
         let previous = cards
-        if let genome = card.genome,
-           let index = cards.firstIndex(where: { $0.genome == genome }) {
+        if let index = cards.firstIndex(where: { $0.id == card.id }) {
+            cards[index] = card
+        } else if let genome = card.genome,
+                  let index = cards.firstIndex(where: { $0.genome == genome }) {
             cards[index] = card
         } else {
             cards.insert(card, at: 0)

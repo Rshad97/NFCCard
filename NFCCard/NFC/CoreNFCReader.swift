@@ -14,18 +14,25 @@ final class CoreNFCReader: NSObject, NFCReaderDriving, NFCTagReaderSessionDelega
     private var becameActive = false
     private var ndefRequest: NDEFRequest?
     private var ndefTransaction: NDEFTransaction?
+    private var probeRequest: NFCReadOnlyProbeRequest?
 
     func start(scanID: UUID, profile: NFCScanProfile,
                eventHandler: @escaping (UUID, NFCReaderEvent) -> Void) {
-        begin(scanID: scanID, profile: profile, ndef: nil, eventHandler: eventHandler)
+        begin(scanID: scanID, profile: profile, ndef: nil, probe: nil, eventHandler: eventHandler)
     }
 
     func startNDEF(scanID: UUID, profile: NFCScanProfile, request: NDEFRequest,
                    eventHandler: @escaping (UUID, NFCReaderEvent) -> Void) {
-        begin(scanID: scanID, profile: profile, ndef: request, eventHandler: eventHandler)
+        begin(scanID: scanID, profile: profile, ndef: request, probe: nil, eventHandler: eventHandler)
+    }
+
+    func startReadOnlyProbe(scanID: UUID, request: NFCReadOnlyProbeRequest,
+                           eventHandler: @escaping (UUID, NFCReaderEvent) -> Void) {
+        begin(scanID: scanID, profile: .standard, ndef: nil, probe: request, eventHandler: eventHandler)
     }
 
     private func begin(scanID: UUID, profile: NFCScanProfile, ndef: NDEFRequest?,
+                       probe: NFCReadOnlyProbeRequest?,
                        eventHandler: @escaping (UUID, NFCReaderEvent) -> Void) {
         queue.async {
             guard self.scanID == nil, self.session == nil else {
@@ -37,6 +44,7 @@ final class CoreNFCReader: NSObject, NFCReaderDriving, NFCTagReaderSessionDelega
             self.scanID = scanID
             self.eventHandler = eventHandler
             self.ndefRequest = ndef
+            self.probeRequest = probe
             self.becameActive = false
             self.emit(.diagnostic("Checking Core NFC availability"))
             let available = NFCReaderSession.readingAvailable
@@ -73,9 +81,13 @@ final class CoreNFCReader: NSObject, NFCReaderDriving, NFCTagReaderSessionDelega
             }
             self.session = reader
             self.emit(.diagnostic("Tag reader created; setting prompt"))
-            reader.alertMessage = ndef?.isWrite == true
-                ? "Hold the SAME inspected tag steady. Its NDEF content will be replaced and verified."
-                : "Hold the top of your iPhone near one NFC card."
+            if probe != nil {
+                reader.alertMessage = "Hold the same card near the top of your iPhone. This probe is read-only."
+            } else {
+                reader.alertMessage = ndef?.isWrite == true
+                    ? "Hold the SAME inspected tag steady. Its NDEF content will be replaced and verified."
+                    : "Hold the top of your iPhone near one NFC card."
+            }
             self.emit(.diagnostic("Calling Core NFC begin"))
             reader.begin()
             self.emit(.diagnostic("Core NFC begin returned; waiting for activation"))
@@ -126,6 +138,7 @@ final class CoreNFCReader: NSObject, NFCReaderDriving, NFCTagReaderSessionDelega
         ndefTransaction?.cancel()
         ndefTransaction = nil
         ndefRequest = nil
+        probeRequest = nil
     }
 
     private func emit(_ event: NFCReaderEvent) {
@@ -184,6 +197,68 @@ final class CoreNFCReader: NSObject, NFCReaderDriving, NFCTagReaderSessionDelega
                     }
                     self.emit(.reading)
                     let card = self.baseProfile(for: tag)
+
+                    if let probe = self.probeRequest {
+                        if let expected = probe.expectedUIDHex,
+                           let observed = card.uidHex,
+                           expected.caseInsensitiveCompare(observed) != .orderedSame {
+                            self.emit(.failure(.init(
+                                kind: .other,
+                                message: "A different NFC card was detected. Present the same card that you opened in Card Snapshot.",
+                                diagnostic: "Read-only probe UID mismatch; expected identifier omitted from log"
+                            )))
+                            return
+                        }
+
+                        guard probe.kind == .desfireGetVersion else {
+                            self.emit(.failure(.init(
+                                kind: .configuration,
+                                message: "Unsupported read-only probe.",
+                                diagnostic: "Unknown NFCReadOnlyProbeKind"
+                            )))
+                            return
+                        }
+
+                        guard case .iso7816(let iso7816) = tag else {
+                            self.emit(.readOnlyProbe(
+                                NFCReadOnlyProbeResult(
+                                    kind: .desfireGetVersion,
+                                    observedUIDHex: card.uidHex,
+                                    recognized: false,
+                                    summary: "DESFire GetVersion requires an ISO 7816 / ISO 14443-4 interface",
+                                    statusWords: [],
+                                    rawResponseHex: "",
+                                    details: ["Interface": card.technology]
+                                ),
+                                card
+                            ))
+                            return
+                        }
+
+                        self.emit(.diagnostic("Running read-only DESFire GetVersion probe"))
+                        DESFireGetVersionReader.run(
+                            tag: iso7816,
+                            observedUIDHex: card.uidHex,
+                            queue: self.queue
+                        ) { [weak self] result in
+                            guard let self, self.session === session, self.stopCompletion == nil else { return }
+                            switch result {
+                            case .success(let probeResult):
+                                self.emit(.diagnostic(
+                                    "DESFire GetVersion completed; statuses=\(probeResult.statusText); responseBytes=\(probeResult.rawResponseHex.count / 2)"
+                                ))
+                                self.emit(.readOnlyProbe(probeResult, card))
+                            case .failure(let error):
+                                self.emit(.failure(.init(
+                                    kind: .other,
+                                    message: "The read-only card identification probe failed: \(error.localizedDescription)",
+                                    diagnostic: NFCErrorDiagnostics.describe(error as NSError)
+                                )))
+                            }
+                        }
+                        return
+                    }
+
                     if let request = self.ndefRequest {
                         guard let access = CoreNDEFTag(tag: tag, card: card) else {
                             self.emit(.failure(.init(kind: .other, message: "This tag does not expose NDEF.", diagnostic: "No NDEF adapter")))
@@ -263,7 +338,7 @@ final class CoreNFCReader: NSObject, NFCReaderDriving, NFCTagReaderSessionDelega
             return NFCCardProfile(
                 technology: "ISO 7816",
                 uidHex: iso7816.identifier.hexString,
-                subtype: iso7816.initialSelectedAID,
+                subtype: nil,
                 details: [
                     "Historical Bytes": iso7816.historicalBytes?.hexString ?? "—",
                     "Application Data": iso7816.applicationData?.hexString ?? "—",

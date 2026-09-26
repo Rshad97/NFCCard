@@ -26,7 +26,10 @@ private struct ISO7816Module: CardModule {
 
 private struct MIFAREModule: CardModule {
     let descriptor = CardModuleDescriptor(id: "mifare", name: "MIFARE Lens", family: "MIFARE", summary: "MIFARE family identification and safe protocol diagnostics")
-    func matches(_ card: NFCCardProfile) -> Bool { card.technology.lowercased().contains("mifare") }
+    func matches(_ card: NFCCardProfile) -> Bool {
+        card.technology.lowercased().contains("mifare")
+            || (card.subtype ?? "").lowercased().contains("desfire")
+    }
 }
 
 private struct ISO15693Module: CardModule {
