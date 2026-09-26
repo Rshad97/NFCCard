@@ -6,7 +6,7 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Add a card to Library") {
+                Section {
                     Button {
                         scanner.startScan()
                     } label: {
@@ -47,6 +47,8 @@ struct HomeView: View {
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.trailing)
                     }
+                } header: {
+                    Text("Add a card to Library")
                 } footer: {
                     Text("This saves a public card snapshot even without NDEF support. Open it in Library to prepare a Wallet display pass. Hold one card near the top of your iPhone.")
                 }
