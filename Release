@@ -3,15 +3,15 @@ Label: NFCCard
 Suite: stable
 Version: 1.1
 Codename: ios
-Date: Fri, 25 Sep 2026 22:10:49 +0000
+Date: Sat, 26 Sep 2026 14:13:04 +0000
 Architectures: iphoneos-arm64
 Components: main
 Description: NFCCard rootless jailbreak package repository
 MD5Sum:
- bb0acbb7d916ad77ae11c0ec0e8c43af              804 Packages
- 563a96ed0f95ec4196c73e358dc3ccb4              543 Packages.gz
- f0e52ff3b5fe435900db5a3cd27ae52c              591 Packages.bz2
+ 6dd8eea9bcafccd84d29cb39fbfac5d5              804 Packages
+ 296cbfdbe8212bce1596ffb03d7aaabf              546 Packages.gz
+ 87497388cb8f7ab848d420ae02d19895              604 Packages.bz2
 SHA256:
- d7b9f52536fa9d14ac26361ea781e23528691b3b5c0cc9042f3e8cc7a28d3811              804 Packages
- ee6b9b9b7687edb4e2fd20613046d22640b97eb881bf5c337ccf40abc47e0f99              543 Packages.gz
- 3f190705d52cbb6a49cb3d694f098a98b8dba5ad6941354cdea8da0480df6362              591 Packages.bz2
+ c2474048577bbc43fba059684f2be9b36380601eff9ad587d52bc268a94f7454              804 Packages
+ 0a29ba2930e49ab2e4c167fc2d0108b0cfc740510b52d1d9dab512f8a14756f9              546 Packages.gz
+ cdc604d3a1e02851b3140e08959f2ed5b9a55966f6cfb1c50fd4b569d0d5f49e              604 Packages.bz2
