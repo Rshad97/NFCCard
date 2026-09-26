@@ -198,8 +198,12 @@ final class CoreNFCReader: NSObject, NFCReaderDriving, NFCTagReaderSessionDelega
                             case .verifying:
                                 session.alertMessage = "Reading back the tag to verify the write…"
                                 self.emit(.ndefVerifying)
-                            case .read(let result): self.emit(.ndefRead(result))
-                            case .verified(let result): self.emit(.ndefWritten(result))
+                            case .read(var result):
+                                result.cardProfile = card
+                                self.emit(.ndefRead(result))
+                            case .verified(var result):
+                                result.cardProfile = card
+                                self.emit(.ndefWritten(result))
                             case .failed(let message):
                                 self.emit(.failure(.init(kind: .other, message: message, diagnostic: "NDEF transaction failed; payload omitted")))
                             }

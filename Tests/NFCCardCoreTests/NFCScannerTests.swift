@@ -32,6 +32,79 @@ private final class FakeReader: NFCReaderDriving {
 
 @MainActor
 final class NFCScannerTests: XCTestCase {
+    func testUnsupportedNDEFCanBeSavedWithoutEnablingWritingAndSurvivesReload() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("cards.json")
+        let library = CardLibraryStore(fileURL: url)
+        let reader = FakeReader()
+        let scanner = NFCScanner(driver: reader, timeouts: .init(retryDelay: 0))
+        scanner.library = library
+        let original = NFCCardProfile(name: "Existing saved card", technology: "ISO 7816", uidHex: "TEST-UID", subtype: "TEST-AID", details: ["Initial AID": "TEST-AID"])
+        var result = NDEFReadResult(identity: "TEST-UID", technology: "ISO 7816", access: .unsupported,
+                                    capacity: 0, records: nil, inspectedAt: .now)
+        result.cardProfile = original
+        XCTAssertFalse(scanner.saveNDEFSnapshot())
+        scanner.readNDEF()
+        XCTAssertFalse(scanner.saveNDEFSnapshot())
+        reader.emit(.ndefRead(result))
+        await eventually { scanner.canStartScan }
+        XCTAssertTrue(library.cards.isEmpty, "Saving must remain explicit")
+        XCTAssertTrue(scanner.saveNDEFSnapshot())
+        XCTAssertTrue(scanner.saveNDEFSnapshot())
+        XCTAssertEqual(library.cards.count, 1, "Repeated saves must not duplicate the same snapshot")
+        XCTAssertEqual(library.cards.first?.subtype, "TEST-AID")
+        XCTAssertEqual(library.cards.first?.details, original.details)
+        XCTAssertEqual(library.cards.first?.ndef?.access, .unsupported)
+        XCTAssertEqual(CardLibraryStore(fileURL: url).cards.count, 1)
+        XCTAssertEqual(CardLibraryStore(fileURL: url).cards.first?.uidHex, "TEST-UID")
+        XCTAssertFalse(result.canPrepareWrite)
+        scanner.writeNDEF(confirmed: .init(before: result, replacement: try NDEFWritePolicy.draft("test", kind: .text)))
+        XCTAssertEqual(reader.starts.count, 1, "Saving never grants physical write capability")
+        XCTAssertFalse(scanner.diagnosticReport.contains("TEST-UID"))
+        XCTAssertFalse(scanner.diagnosticReport.contains("TEST-AID"))
+        scanner.readNDEF()
+        XCTAssertFalse(scanner.saveNDEFSnapshot(), "New scan clears the stale snapshot")
+        scanner.cancelScan()
+        await eventually { scanner.canStartScan }
+        reader.emit(.ndefRead(result))
+        await Task.yield()
+        XCTAssertNil(scanner.lastNDEFRead)
+    }
+
+    func testNDEFSnapshotSaveFailureDoesNotClaimSuccessOrEraseExistingCards() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("cards.json")
+        let library = CardLibraryStore(fileURL: url)
+        let existing = NFCCardProfile(name: "Existing", technology: "Test", genome: "existing")
+        XCTAssertTrue(library.save(existing))
+        try FileManager.default.removeItem(at: url)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
+        let reader = FakeReader()
+        let scanner = NFCScanner(driver: reader, timeouts: .init(retryDelay: 0))
+        scanner.library = library
+        scanner.readNDEF(); reader.emit(.ndefRead(ndefSnapshot()))
+        await eventually { scanner.canStartScan }
+        XCTAssertFalse(scanner.saveNDEFSnapshot())
+        XCTAssertNotNil(scanner.errorMessage)
+        XCTAssertEqual(library.cards, [existing])
+        XCTAssertNil(scanner.lastCard)
+        XCTAssertFalse(scanner.diagnosticReport.contains("snapshot saved"))
+    }
+
+    func testNDEFSnapshotWithoutLibraryReportsFailure() async {
+        let reader = FakeReader()
+        let scanner = NFCScanner(driver: reader, timeouts: .init(retryDelay: 0))
+        scanner.readNDEF(); reader.emit(.ndefRead(ndefSnapshot()))
+        await eventually { scanner.canStartScan }
+        XCTAssertFalse(scanner.saveNDEFSnapshot())
+        XCTAssertNotNil(scanner.errorMessage)
+        XCTAssertNil(scanner.lastCard)
+    }
+
     private func ndefSnapshot() -> NDEFReadResult {
         NDEFReadResult(identity: "TEST-TAG", technology: "Test NDEF", access: .readWrite, capacity: 4096,
                        records: try! NDEFWritePolicy.draft("private NDEF content", kind: .text), inspectedAt: .now)

@@ -25,6 +25,8 @@ final class NFCCardUITests: XCTestCase {
         let review = app.buttons["ndef.review"]
         XCTAssertTrue(review.exists)
         XCTAssertFalse(review.isEnabled)
+        XCTAssertFalse(app.buttons["ndef.save-card"].exists)
+        XCTAssertFalse(app.buttons["ndef.wallet"].exists)
         let field = app.textViews["ndef.content"].exists ? app.textViews["ndef.content"] : app.textFields["ndef.content"]
         XCTAssertTrue(field.exists)
         field.tap()
@@ -39,6 +41,38 @@ final class NFCCardUITests: XCTestCase {
             XCTAssertFalse(review.isEnabled)
         }
         attachScreenshot(app, name: "NDEF read failure remains retryable; writing disabled")
+    }
+
+    func testUnsupportedNDEFCanSaveAndReachWalletWithoutEnablingWrite() {
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-ndef-unsupported"]
+        app.launch()
+        app.buttons["ndef.open"].tap()
+        app.buttons["ndef.read"].tap()
+        let save = app.buttons["ndef.save-card"]
+        XCTAssertTrue(save.waitForExistence(timeout: 5))
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: save)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 5), .completed)
+        for _ in 0..<3 where !save.isHittable { app.swipeUp() }
+        save.tap()
+        XCTAssertTrue(app.staticTexts["ndef.saved"].waitForExistence(timeout: 5))
+        XCTAssertFalse(save.isEnabled)
+        attachScreenshot(app, name: "Unsupported NDEF card saved; Wallet remains available")
+        app.buttons["ndef.wallet"].tap()
+        XCTAssertTrue(app.staticTexts["DISPLAY ONLY"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Not an access credential"].exists)
+        app.navigationBars.buttons.firstMatch.tap()
+        for _ in 0..<5 where !app.buttons["ndef.review"].exists { app.swipeUp() }
+        let review = app.buttons["ndef.review"]
+        XCTAssertTrue(review.exists)
+        XCTAssertFalse(review.isEnabled, "Saving and Wallet must not grant write support")
+        app.tabBars.buttons["Library"].tap()
+        let saved = app.staticTexts["NDEF Unsupported Test Card"].firstMatch
+        XCTAssertTrue(saved.waitForExistence(timeout: 5))
+        saved.tap()
+        XCTAssertTrue(app.buttons["card.wallet"].waitForExistence(timeout: 5))
+        app.buttons["card.wallet"].tap()
+        XCTAssertTrue(app.staticTexts["DISPLAY ONLY"].waitForExistence(timeout: 5))
     }
 
     func testWalletImportIsAvailableWithoutAnActiveScan() {

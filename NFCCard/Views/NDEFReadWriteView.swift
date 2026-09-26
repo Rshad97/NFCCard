@@ -8,6 +8,7 @@ struct NDEFReadWriteView: View {
     @State private var pending: NDEFWritePlan?
     @State private var confirming = false
     @State private var preparationError: String?
+    @State private var savedInspection: Date?
     @FocusState private var editing: Bool
 
     private var profile: NFCScanProfile { felica ? .felica : .standard }
@@ -37,10 +38,27 @@ struct NDEFReadWriteView: View {
             }
 
             if let result = scanner.lastNDEFRead {
+                Section("Add this card") {
+                    Button("Save Card to Library") {
+                        if scanner.saveNDEFSnapshot() { savedInspection = result.inspectedAt }
+                    }
+                    .disabled(!scanner.canStartScan || savedInspection == result.inspectedAt)
+                    .accessibilityIdentifier("ndef.save-card")
+                    NavigationLink { WalletCardView(card: result.cardSnapshot) } label: {
+                        Label("Prepare Wallet Card", systemImage: "wallet.pass")
+                    }
+                    .disabled(!scanner.canStartScan)
+                    .accessibilityIdentifier("ndef.wallet")
+                    if savedInspection == result.inspectedAt {
+                        Text("Card snapshot saved to Library.").accessibilityIdentifier("ndef.saved")
+                    }
+                    Text("Adding a snapshot or preparing a Wallet display pass does not require NDEF support. It does not copy protected card data or make the phone an access credential.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
                 Section("Inspected tag") {
                     LabeledContent("Technology", value: result.technology)
                     LabeledContent("NDEF access", value: result.access.rawValue)
-                    LabeledContent("Capacity", value: "\(result.capacity) bytes")
+                    LabeledContent("NDEF capacity", value: result.access == .unsupported ? "Not available" : "\(result.capacity) bytes")
                     Text("Tag identifier: \(result.identity.isEmpty ? "Unavailable" : result.identity)")
                         .font(.caption.monospaced()).textSelection(.enabled)
                     if let records = result.records {
@@ -56,7 +74,7 @@ struct NDEFReadWriteView: View {
                             }
                         }
                     } else {
-                        Text("This card does not expose a readable NDEF message. Protected access-card data cannot be read or written here.")
+                        Text("Core NFC did not report NDEF support in this scan. This does not identify the exact chip, prove encryption, or measure total card memory. You can still save its public snapshot and prepare a Wallet display pass.")
                             .foregroundStyle(.orange)
                     }
                     if result.access == .readOnly { Text("Read-only tag. Writing is disabled.").foregroundStyle(.orange) }
@@ -87,6 +105,8 @@ struct NDEFReadWriteView: View {
             .disabled(scanner.isScanning || scanner.isRecovering)
 
             Section("Scope") {
+                Text("Writing outside NDEF requires a driver for the card's actual application: documented commands, file layout and any required authentication. ISO 7816 alone is not enough to select a write command. No such driver has been configured for this card.")
+                    .font(.footnote)
                 Text("NDEF text and web URLs only. This does not copy a complete card, change its UID, unlock protected memory, emulate a card, or activate access on an ACID reader. No formatting, permanent locking or access-key changes are performed.")
                     .font(.footnote).accessibilityIdentifier("ndef.scope")
                 Text("A successful write is reported only after reading the same message back. If interrupted, read the tag again before deciding whether to retry.")

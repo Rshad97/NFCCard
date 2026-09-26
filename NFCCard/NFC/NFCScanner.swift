@@ -47,6 +47,25 @@ final class NFCScanner: ObservableObject {
 
     func readNDEF(profile: NFCScanProfile = .standard) { beginScan(profile: profile, ndef: .read) }
 
+    /// Explicit local snapshot save, independent of NDEF write support.
+    @discardableResult
+    func saveNDEFSnapshot() -> Bool {
+        guard canStartScan, let result = lastNDEFRead else { return false }
+        guard let library else {
+            errorMessage = "The card library is not ready. Try again."
+            return false
+        }
+        let card = result.cardSnapshot
+        guard library.save(card) else {
+            errorMessage = library.storageError ?? "Could not save the card snapshot."
+            return false
+        }
+        lastCard = card
+        errorMessage = nil
+        appendLog("Public card snapshot saved to Library; identifier and payload omitted")
+        return true
+    }
+
     /// Called only from the explicit replacement confirmation, never from detection.
     func writeNDEF(confirmed plan: NDEFWritePlan, profile: NFCScanProfile = .standard) {
         guard canStartScan else { return }

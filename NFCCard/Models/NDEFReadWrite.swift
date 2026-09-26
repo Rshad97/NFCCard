@@ -37,6 +37,23 @@ struct NDEFReadResult: Equatable {
     /// nil means unsupported/unread, not an empty NDEF message.
     let records: [NDEFRecordData]?
     let inspectedAt: Date
+    /// Public metadata from this physical scan; not a dump of protected memory.
+    var cardProfile: NFCCardProfile? = nil
+
+    var cardSnapshot: NFCCardProfile {
+        var card = cardProfile ?? NFCCardProfile(technology: technology, uidHex: identity.isEmpty ? nil : identity)
+        card.scannedAt = inspectedAt
+        card.ndef = NDEFMetadata(access: access, capacity: capacity, records: (records ?? []).map {
+            NDEFRecordSummary(typeNameFormat: String($0.format), type: $0.type.hexString,
+                              identifierHex: $0.identifier.hexString,
+                              payloadPreview: String($0.displayValue.prefix(512)), payloadLength: $0.payload.count)
+        })
+        card.matchedModules = CardModuleRegistry.matches(for: card)
+        card.capabilities = CapabilityMapService.capabilities(for: card)
+        card.privacyInsights = CardPrivacyAnalyzer.analyze(card)
+        card.genome = CardGenomeService.fingerprint(card)
+        return card
+    }
 
     var canPrepareWrite: Bool {
         access == .readWrite && capacity > 0 && !identity.isEmpty && records != nil
