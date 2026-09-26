@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.2
+- Add a bounded read-only fallback for cards that return `910B` to wrapped DESFire GetVersion.
+- The fallback selects DESFire PICC master application AID `000000` for the current RF session, then retries GetVersion once.
+- Record the fallback status separately so a rejected PICC selection is distinguishable from a successful GetVersion response.
+- No authentication, key operations, protected reads, memory writes, formatting, or persistent card changes are performed.
+
 ## 0.4.1
 - Fix the read-only DESFire GetVersion transport on Core NFC by using a valid 256-byte expected response length, which encodes the short ISO 7816 Le field as `00`.
 - Prevent `NFCError 102 / nfcd Invalid Parameter` caused by the invalid zero expected-response length used in 0.4.0.
