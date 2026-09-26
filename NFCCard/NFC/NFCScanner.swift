@@ -22,7 +22,9 @@ final class NFCScanner: ObservableObject {
     @Published private(set) var isRecovering = false
     @Published private(set) var requiresRelaunch = false
     @Published private(set) var lastNDEFRead: NDEFReadResult?
+    @Published private(set) var lastProbe: NFCReadOnlyProbeResult?
     @Published private(set) var isNDEFOperation = false
+    @Published private(set) var isProbeOperation = false
     private var isWriteOperation = false
 
     var isScanning: Bool { activeScanID != nil }
@@ -46,6 +48,13 @@ final class NFCScanner: ObservableObject {
     func startFeliCaScan() { beginScan(profile: .felica) }
 
     func readNDEF(profile: NFCScanProfile = .standard) { beginScan(profile: profile, ndef: .read) }
+
+    func startDESFireProbe(expectedUIDHex: String?) {
+        beginScan(
+            profile: .standard,
+            probe: NFCReadOnlyProbeRequest(kind: .desfireGetVersion, expectedUIDHex: expectedUIDHex)
+        )
+    }
 
     /// Explicit local snapshot save, independent of NDEF write support.
     @discardableResult
@@ -102,17 +111,27 @@ final class NFCScanner: ObservableObject {
 
     private static let uncertainWrite = "The write was interrupted. The tag may have changed; read it again to check. No automatic retry was made."
 
-    private func beginScan(profile: NFCScanProfile, ndef: NDEFRequest? = nil) {
+    private func beginScan(
+        profile: NFCScanProfile,
+        ndef: NDEFRequest? = nil,
+        probe: NFCReadOnlyProbeRequest? = nil
+    ) {
         guard canStartScan else { return }
         let id = UUID()
         activeScanID = id
         isNDEFOperation = ndef != nil
+        isProbeOperation = probe != nil
         isWriteOperation = ndef?.isWrite == true
-        // Inspection is single-use. A retry always needs a new read/confirmation.
+        // Inspection/probe results are single-use. A retry always needs a new physical read.
         lastNDEFRead = nil
+        if probe != nil { lastProbe = nil }
         errorMessage = nil
         errorDetails = nil
-        currentScanProfile = ndef == nil ? profile.title : (isWriteOperation ? "NDEF Write" : "NDEF Read")
+        if probe != nil {
+            currentScanProfile = "Read-Only Card Probe"
+        } else {
+            currentScanProfile = ndef == nil ? profile.title : (isWriteOperation ? "NDEF Write" : "NDEF Read")
+        }
         phase = .starting
         statusMessage = "Starting \(profile.title) reader…"
         appendLog("Starting \(profile.title), session \(id.uuidString.prefix(8))")
@@ -132,8 +151,13 @@ final class NFCScanner: ObservableObject {
         let handler: (UUID, NFCReaderEvent) -> Void = { [weak self] id, event in
             Task { @MainActor in self?.receive(event, id: id) }
         }
-        if let ndef { driver.startNDEF(scanID: id, profile: profile, request: ndef, eventHandler: handler) }
-        else { driver.start(scanID: id, profile: profile, eventHandler: handler) }
+        if let probe {
+            driver.startReadOnlyProbe(scanID: id, request: probe, eventHandler: handler)
+        } else if let ndef {
+            driver.startNDEF(scanID: id, profile: profile, request: ndef, eventHandler: handler)
+        } else {
+            driver.start(scanID: id, profile: profile, eventHandler: handler)
+        }
     }
 
     private func receive(_ event: NFCReaderEvent, id: UUID) {
@@ -159,8 +183,13 @@ final class NFCScanner: ObservableObject {
             appendLog("Connecting to tag")
         case .reading:
             phase = .reading
-            statusMessage = isNDEFOperation ? "Reading NDEF…" : "Reading public metadata…"
-            appendLog(isNDEFOperation ? "Reading NDEF; payload omitted from log" : "Reading public metadata")
+            if isProbeOperation {
+                statusMessage = "Running read-only card probe…"
+                appendLog("Running read-only card identification probe")
+            } else {
+                statusMessage = isNDEFOperation ? "Reading NDEF…" : "Reading public metadata…"
+                appendLog(isNDEFOperation ? "Reading NDEF; payload omitted from log" : "Reading public metadata")
+            }
         case .ndefRead(let result):
             guard isNDEFOperation, !isWriteOperation else { return }
             lastNDEFRead = result
@@ -187,6 +216,47 @@ final class NFCScanner: ObservableObject {
             library?.save(card)
             appendLog("Analyzed \(card.technology)")
             finish(id: id, status: "Card analyzed")
+        case .readOnlyProbe(let result, let observedCard):
+            guard isProbeOperation else { return }
+            lastProbe = result
+
+            var card = observedCard
+            if let previous = lastCard,
+               let previousUID = previous.uidHex,
+               let observedUID = observedCard.uidHex,
+               previousUID.caseInsensitiveCompare(observedUID) == .orderedSame {
+                card = previous
+                card.technology = observedCard.technology
+                card.uidHex = observedCard.uidHex
+                card.subtype = observedCard.subtype
+                for (key, value) in observedCard.details {
+                    card.details[key] = value
+                }
+            }
+
+            card.details["DESFire Probe"] = result.summary
+            card.details["DESFire Status Words"] = result.statusText
+            if !result.rawResponseHex.isEmpty {
+                card.details["DESFire GetVersion Raw"] = result.rawResponseHex
+            }
+            for (key, value) in result.details {
+                card.details["DESFire " + key] = value
+            }
+
+            card.matchedModules = CardModuleRegistry.matches(for: card)
+            card.capabilities = CapabilityMapService.capabilities(for: card)
+            card.privacyInsights = CardPrivacyAnalyzer.analyze(card)
+            card.genome = CardGenomeService.fingerprint(card)
+            lastCard = card
+            library?.save(card)
+
+            appendLog("Read-only DESFire probe result: \(result.summary); statuses=\(result.statusText)")
+            finish(
+                id: id,
+                status: result.recognized
+                    ? "DESFire-compatible card identified"
+                    : "Probe complete — DESFire not confirmed"
+            )
         case .failure(let failure):
             let canceled = failure.kind == .canceled
             finish(id: id, status: canceled ? "Scan canceled" : "Scan failed",
@@ -219,6 +289,7 @@ final class NFCScanner: ObservableObject {
         let wasWriting = isWriteOperation
         isWriteOperation = false
         isNDEFOperation = false
+        isProbeOperation = false
         activationWatchdog?.cancel()
         activationWatchdog = nil
         sessionWatchdog?.cancel()
