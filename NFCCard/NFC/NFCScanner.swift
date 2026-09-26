@@ -38,6 +38,7 @@ final class NFCScanner: ObservableObject {
     private var sessionWatchdog: Task<Void, Never>?
     private var cleanupWatchdog: Task<Void, Never>?
     private var stoppingScanID: UUID?
+    private var probeTargetCardID: UUID?
 
     init(driver: NFCReaderDriving, timeouts: Timeouts = Timeouts()) {
         self.driver = driver
@@ -49,10 +50,11 @@ final class NFCScanner: ObservableObject {
 
     func readNDEF(profile: NFCScanProfile = .standard) { beginScan(profile: profile, ndef: .read) }
 
-    func startDESFireProbe(expectedUIDHex: String?) {
+    func startDESFireProbe(for card: NFCCardProfile) {
+        probeTargetCardID = card.id
         beginScan(
             profile: .standard,
-            probe: NFCReadOnlyProbeRequest(kind: .desfireGetVersion, expectedUIDHex: expectedUIDHex)
+            probe: NFCReadOnlyProbeRequest(kind: .desfireGetVersion, expectedUIDHex: card.uidHex)
         )
     }
 
@@ -221,7 +223,11 @@ final class NFCScanner: ObservableObject {
             lastProbe = result
 
             var card = observedCard
-            if let previous = lastCard,
+            let storedTarget = probeTargetCardID.flatMap { targetID in
+                library?.cards.first(where: { $0.id == targetID })
+            }
+            let mergeBase = storedTarget ?? lastCard
+            if let previous = mergeBase,
                let previousUID = previous.uidHex,
                let observedUID = observedCard.uidHex,
                previousUID.caseInsensitiveCompare(observedUID) == .orderedSame {
@@ -294,6 +300,7 @@ final class NFCScanner: ObservableObject {
         isWriteOperation = false
         isNDEFOperation = false
         isProbeOperation = false
+        probeTargetCardID = nil
         activationWatchdog?.cancel()
         activationWatchdog = nil
         sessionWatchdog?.cancel()
