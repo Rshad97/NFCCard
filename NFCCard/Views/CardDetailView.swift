@@ -121,6 +121,32 @@ struct CardDetailView: View {
                 }
             }
 
+            Section("Write") {
+                NavigationLink {
+                    NDEFReadWriteView()
+                } label: {
+                    Label("Open NDEF Writer", systemImage: "square.and.pencil")
+                }
+                .accessibilityIdentifier("card.ndef-writer")
+
+                if let ndef = displayedCard.ndef {
+                    LabeledContent("NDEF write", value: ndef.access == .readWrite ? "Available after fresh read" : (ndef.access == .readOnly ? "Read-only" : (ndef.access == .unsupported ? "Unsupported" : "Unknown")))
+                    if ndef.access == .readWrite {
+                        Text("A fresh NDEF read is required immediately before every write. NFCCard verifies the result by reading the tag back.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    } else if ndef.access == .unsupported {
+                        Text("This card does not expose a generic NDEF write path. Application-specific protected memory is not modified.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Text("Open the writer to inspect NDEF write capability on the physical tag.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             if let ndef = displayedCard.ndef {
                 Section("NDEF") {
                     LabeledContent("Access", value: ndef.access.rawValue)
