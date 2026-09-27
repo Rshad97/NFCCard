@@ -55,7 +55,7 @@ struct HomeView: View {
 
                 Section("Read / Write") {
                     NavigationLink { NDEFReadWriteView() } label: {
-                        Label("Read / Write NDEF", systemImage: "square.and.pencil")
+                        Label("NDEF Writer", systemImage: "square.and.pencil")
                     }
                     .accessibilityIdentifier("ndef.open")
                 }
