@@ -118,9 +118,8 @@ enum NDEFWritePolicy {
         var errorDescription: String? { reason }
     }
 
-    static func draft(_ rawValue: String, kind: DraftKind) throws -> [NDEFRecordData] {
-        let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty else {
+    static func draft(_ value: String, kind: DraftKind) throws -> [NDEFRecordData] {
+        guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw Failure(reason: "Enter content first.")
         }
         guard value.utf8.count <= maximumDraftBytes else {
