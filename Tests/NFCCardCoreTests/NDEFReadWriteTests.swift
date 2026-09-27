@@ -41,6 +41,55 @@ final class NDEFWritePolicyTests: XCTestCase {
             XCTAssertThrowsError(try NDEFWritePolicy.draft(value, kind: .url))
         }
     }
+
+    func testEmailAndPhoneRoundTripAndValidation() throws {
+        let email = try NDEFWritePolicy.draft("User@example.com", kind: .email)
+        XCTAssertEqual(email[0].displayValue, "mailto:User@example.com")
+        XCTAssertNoThrow(try NDEFWritePolicy.validate(
+            NDEFWritePlan(before: snapshot(capacity: 512), replacement: email),
+            now: testTime
+        ))
+
+        let phone = try NDEFWritePolicy.draft("+966 50 123 4567", kind: .phone)
+        XCTAssertEqual(phone[0].displayValue, "tel:+966501234567")
+        XCTAssertNoThrow(try NDEFWritePolicy.validate(
+            NDEFWritePlan(before: snapshot(capacity: 512), replacement: phone),
+            now: testTime
+        ))
+
+        for value in ["not-an-email", "a @b.com", "a@b"] {
+            XCTAssertThrowsError(try NDEFWritePolicy.draft(value, kind: .email))
+        }
+        for value in ["12", "+966#123"] {
+            XCTAssertThrowsError(try NDEFWritePolicy.draft(value, kind: .phone))
+        }
+
+        let unsafeURI = NDEFRecordData(
+            format: 1,
+            type: Data([0x55]),
+            identifier: Data(),
+            payload: Data([0]) + Data("javascript:alert(1)".utf8)
+        )
+        XCTAssertThrowsError(try NDEFWritePolicy.validate(
+            NDEFWritePlan(before: snapshot(capacity: 512), replacement: [unsafeURI]),
+            now: testTime
+        ))
+    }
+
+    func testWriteStatusAndRemainingCapacity() {
+        let writable = snapshot(capacity: 128, records: testNDEFRecords("abc"))
+        XCTAssertEqual(writable.writeStatusText, "Writable")
+        XCTAssertEqual(writable.usedBytes, NDEFWritePolicy.byteCount(testNDEFRecords("abc")))
+        XCTAssertEqual(writable.remainingCapacity, 128 - writable.usedBytes)
+
+        let readOnly = snapshot(access: .readOnly)
+        XCTAssertEqual(readOnly.writeStatusText, "Read-only")
+        XCTAssertFalse(readOnly.canPrepareWrite)
+
+        let unsupported = snapshot(access: .unsupported, capacity: 0, records: nil)
+        XCTAssertEqual(unsupported.writeStatusText, "NDEF unsupported")
+        XCTAssertNil(unsupported.remainingCapacity)
+    }
     func testEmptyAndOversizeDraftsRejectedInBytes() {
         for value in ["", " \n", String(repeating: "ع", count: 2049)] {
             XCTAssertThrowsError(try NDEFWritePolicy.draft(value, kind: .text))

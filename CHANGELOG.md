@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0
+- Expand the confirmed NDEF writer from Text and HTTP(S) URLs to Text, Web URL, Email and Phone records.
+- Show explicit write readiness, NDEF bytes used and remaining capacity after inspection.
+- Keep the two-step physical safety gate: a fresh read is required, then the same tag identity, technology, access mode, capacity and original content are rechecked before writing.
+- Continue read-back verification before reporting write success; no automatic retry occurs after an uncertain transport failure.
+- Expose the NDEF Writer directly from Card Snapshot with clear Writable / Read-only / Unsupported status.
+- Keep application-specific protected card memory, access credentials, keys, UID changes, formatting and permanent locking outside the generic writer.
+
 ## 0.4.2
 - Add a bounded read-only fallback for cards that return `910B` to wrapped DESFire GetVersion.
 - The fallback selects DESFire PICC master application AID `000000` for the current RF session, then retries GetVersion once.
