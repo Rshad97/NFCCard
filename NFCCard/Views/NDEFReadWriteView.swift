@@ -58,7 +58,14 @@ struct NDEFReadWriteView: View {
                 Section("Inspected tag") {
                     LabeledContent("Technology", value: result.technology)
                     LabeledContent("NDEF access", value: result.access.rawValue)
+                    LabeledContent("Write status", value: result.writeStatusText)
                     LabeledContent("NDEF capacity", value: result.access == .unsupported ? "Not available" : "\(result.capacity) bytes")
+                    if result.access != .unsupported {
+                        LabeledContent("Used by NDEF", value: "\(result.usedBytes) bytes")
+                        if let remaining = result.remainingCapacity {
+                            LabeledContent("Remaining", value: "\(remaining) bytes")
+                        }
+                    }
                     Text("Tag identifier: \(result.identity.isEmpty ? "Unavailable" : result.identity)")
                         .font(.caption.monospaced()).textSelection(.enabled)
                     if let records = result.records {
@@ -85,21 +92,28 @@ struct NDEFReadWriteView: View {
                 Picker("Record type", selection: $kind) {
                     ForEach(NDEFWritePolicy.DraftKind.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                 }
-                TextField(kind == .text ? "Text to write" : "https://example.com", text: $content, axis: .vertical)
+                TextField(kind.placeholder, text: $content, axis: .vertical)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .lineLimit(3...6)
                     .focused($editing)
                     .accessibilityIdentifier("ndef.content")
                 if let draft {
-                    Text("Encoded message: \(NDEFWritePolicy.byteCount(draft)) bytes")
+                    let bytes = NDEFWritePolicy.byteCount(draft)
+                    Text("Encoded message: \(bytes) bytes")
                         .font(.caption).foregroundStyle(.secondary)
+                    if let capacity = scanner.lastNDEFRead?.capacity,
+                       scanner.lastNDEFRead?.access == .readWrite {
+                        Text(bytes <= capacity ? "Fits the inspected tag." : "Too large for the inspected tag.")
+                            .font(.caption)
+                            .foregroundStyle(bytes <= capacity ? .secondary : .red)
+                    }
                 }
                 Button("Review Write…", role: .destructive) { prepare() }
                     .disabled(!scanner.canStartScan || scanner.lastNDEFRead?.canPrepareWrite != true || draft == nil)
                     .accessibilityIdentifier("ndef.review")
                 if let preparationError { Text(preparationError).foregroundStyle(.red) }
-                Text("Writing replaces ALL existing NDEF records with this one record. The inspected tag and its old content must match on the second scan. Confirmation expires after two minutes. Never use a production access card as a test tag.")
+                Text("Writing replaces ALL existing NDEF records with this one supported record. The inspected tag and its old content must match on the second scan. Confirmation expires after two minutes. Keep the tag still through read-back verification.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
             .disabled(scanner.isScanning || scanner.isRecovering)
@@ -107,13 +121,13 @@ struct NDEFReadWriteView: View {
             Section("Scope") {
                 Text("Writing outside NDEF requires a driver for the card's actual application: documented commands, file layout and any required authentication. ISO 7816 alone is not enough to select a write command. No such driver has been configured for this card.")
                     .font(.footnote)
-                Text("NDEF text and web URLs only. This does not copy a complete card, change its UID, unlock protected memory, emulate a card, or activate access on an ACID reader. No formatting, permanent locking or access-key changes are performed.")
+                Text("Supported writes are NDEF Text, Web URL, Email and Phone records. This does not copy a complete card, change its UID, unlock protected memory, emulate a card, or modify access credentials. No formatting, permanent locking or access-key changes are performed.")
                     .font(.footnote).accessibilityIdentifier("ndef.scope")
                 Text("A successful write is reported only after reading the same message back. If interrupted, read the tag again before deciding whether to retry.")
                     .font(.footnote)
             }
         }
-        .navigationTitle("Read / Write NDEF")
+        .navigationTitle("NDEF Writer")
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
