@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.0
+
+- Search saved snapshots by name, technology, subtype, or genome in the Library tab.
+- Swiping to delete a search result removes that snapshot by ID. A failed save restores the row and displays the storage error.
+
 ## 0.5.0
 - Expand the confirmed NDEF writer from Text and HTTP(S) URLs to Text, Web URL, Email and Phone records.
 - Show explicit write readiness, NDEF bytes used and remaining capacity after inspection.
