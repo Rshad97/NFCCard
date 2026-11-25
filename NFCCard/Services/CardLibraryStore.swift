@@ -44,11 +44,21 @@ final class CardLibraryStore: ObservableObject {
         return false
     }
 
-    func remove(at offsets: IndexSet) {
-        for index in offsets.sorted(by: >) {
-            cards.remove(at: index)
+    func cards(matching query: String) -> [NFCCardProfile] {
+        let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !term.isEmpty else { return cards }
+        return cards.filter { card in
+            [card.name, card.technology, card.subtype, card.genome]
+                .compactMap { $0 }
+                .contains { $0.localizedStandardContains(term) }
         }
-        persist()
+    }
+
+    func remove(ids: Set<UUID>) {
+        guard !ids.isEmpty else { return }
+        let previous = cards
+        cards.removeAll { ids.contains($0.id) }
+        if !persist() { cards = previous }
     }
 
     private func load() {
