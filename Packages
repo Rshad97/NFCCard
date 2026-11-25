@@ -1,0 +1,17 @@
+Package: com.rashad.nfccard
+Name: NFCCard
+Version: 0.6.0
+Architecture: iphoneos-arm64
+Description: NFC research and interoperability toolkit with Protocol Atlas, Card Genome, Capability Map, Privacy Radar and Wallet Route Advisor.
+Maintainer: Rashad
+Section: Applications
+Depends: firmware (>= 16.0)
+Homepage: https://github.com/Rshad97/NFCCard
+Icon: https://raw.githubusercontent.com/Rshad97/NFCCard/main/design/AppIconSource.png
+Filename: ./debs/com.rashad.nfccard_0.6.0_iphoneos-arm64.deb
+Size: 429872
+MD5sum: 040da5aa72bc881744e2344fa4cc3ee6
+SHA1: e87d4a0504904257ee25ef8be63d7eae6e3347a0
+SHA256: 3436f88a746421cb789e493062119c20ec5a8c66f8dec598ad9d1ae12a0f1582
+SHA512: 034700d928e4236117bd3a125cae2d16494673c7b3afb1dc0b08ceffd9805fc62b647657616857607f4ca3962c19a17b50bd370f9485f65379cf9db517ec786a
+
